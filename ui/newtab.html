@@ -28,7 +28,7 @@
   .search input:hover { border-color: rgba(255,255,255,.18); }
   :root[data-theme="light"] .search input:hover { border-color: rgba(0,0,0,.2); }
   .search input:focus, .search input:focus-visible { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 2px var(--accent-ring); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, 112px); justify-content: center; gap: 12px; margin-top: 44px; }
+  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 44px auto 0; max-width: 608px; }
   .tile { width: 112px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px; border-radius: 14px; text-decoration: none; color: var(--fg); background: var(--tile-bg);
     transition: background var(--t), transform var(--t); }
   .tile:hover { background: var(--tile-bg-hover); transform: translateY(-1px); text-decoration: none; }
@@ -36,7 +36,8 @@
   :root[data-theme="light"] .tile .ic { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
   .tile .ic img.fav { width: 28px; height: 28px; border-radius: 6px; }
   .tile .ic .avatar { width: 56px; height: 56px; border-radius: 12px; font-size: 24px; }
-  .tile span.name { font-size: 13px; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--tile-cap); }
+  .tile span.name { font-size: 12.5px; line-height: 1.25; max-width: 100%; overflow: hidden; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; color: var(--tile-cap); }
+  .tile { height: auto; min-height: 96px; }
   .private { margin: 28px auto 0; max-width: 540px; padding: 18px 20px; text-align: left; color: var(--fg2); line-height: 1.6; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .private h2 { margin: 0 0 6px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); display: flex; gap: 8px; align-items: center; }
   .private h2 svg { color: var(--accent); }

@@ -251,7 +251,9 @@ pub fn activate(s: &mut State, win: WinId, tab: TabId) {
     if let Some(view) = &t.view {
         view.set_visible(1);
         content.layout();
-        if t.url == super::NEW_TAB_URL || t.url.is_empty() {
+        // The New Tab page has its own (autofocused) search box; only a
+        // blank tab sends the cursor to the address bar.
+        if t.url.is_empty() {
             focus_omnibox(s, win);
         } else {
             view.request_focus();
