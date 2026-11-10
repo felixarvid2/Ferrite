@@ -1,0 +1,30 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>New Tab</title>
+<link rel="icon" href="ferrite://app/icon.svg">
+<link rel="stylesheet" href="ferrite://app/common.css">
+<script src="ferrite://app/common.js"></script>
+</head>
+<body>
+<style>
+  .nt { max-width: 760px; margin: 12vh auto 0; padding: 0 24px; text-align: center; }
+  .nt h1 { font-size: 30px; font-weight: 600; margin: 0 0 22px; letter-spacing: -.01em; display: flex; gap: 12px; justify-content: center; align-items: center; }
+  .nt h1 img { width: 38px; height: 38px; }
+  .nt form input { width: 100%; padding: 12px 18px; font-size: 15px; border-radius: 24px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; margin-top: 30px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; text-decoration: none; color: var(--fg); background: var(--bg2); border: 1px solid var(--border); }
+  .tile:hover { background: var(--bg3); }
+  .tile img { width: 28px; height: 28px; }
+  .tile span { font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .private { margin: 24px auto 0; max-width: 520px; color: var(--fg2); line-height: 1.6; }
+</style>
+<div class="nt">
+  <h1><img src="ferrite://app/icon.svg" alt="">Ferrite</h1>
+  <form id="f"><input id="q" placeholder="Search the web or type an address" autocomplete="off" spellcheck="false"></form>
+  <div class="tiles" id="tiles"></div>
+  <div class="private" id="priv" hidden>You are browsing privately. Pages you visit, cookies, site data and downloads list entries are kept in memory and discarded when you close all private windows. Downloaded files stay on disk. Your network provider and the sites you visit can still see your activity.</div>
+</div>
+<script src="ferrite://app/newtab.js"></script>
+</body></html>

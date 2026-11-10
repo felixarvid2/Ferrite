@@ -1,0 +1,19 @@
+[package]
+name = "ferrite-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Engine-independent logic for the Ferrite browser: storage, omnibox, sessions, settings."
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+rusqlite.workspace = true
+url.workspace = true
+percent-encoding.workspace = true
+dirs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

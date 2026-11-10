@@ -1,0 +1,39 @@
+"use strict";
+let settings;
+async function load() {
+  const r = await api("settings_get");
+  settings = r.settings;
+  const sel = document.getElementById("engines");
+  sel.replaceChildren(...r.engines.map(e => el("option", { value: e.id, text: e.name })), el("option", { value: "custom", text: "Custom…" }));
+  for (const input of document.querySelectorAll("[data-key]")) {
+    const v = settings[input.dataset.key];
+    if (input.type === "checkbox") input.checked = !!v; else input.value = v;
+  }
+  loadPerms();
+  const a = await api("about");
+  document.getElementById("about").textContent = `Ferrite ${a.ferrite} · Chromium ${a.chromium} · CEF ${a.cef}` + (a.sandbox ? "" : " · sandbox disabled");
+}
+async function loadPerms() {
+  const perms = await api("permissions_list");
+  const box = document.getElementById("perms");
+  box.replaceChildren();
+  if (!perms.length) { box.append(el("div", { class: "empty", text: "No site has been given or refused permissions yet" })); return; }
+  for (const p of perms) box.append(el("div", { class: "row" },
+    el("div", { class: "grow" }, el("div", { class: "title", text: p.origin }), el("div", { class: "sub", text: p.permission.replace(/_/g, " ") })),
+    el("span", { class: p.decision === "allow" ? "" : "muted", text: p.decision === "allow" ? "Allowed" : "Blocked" }),
+    el("button", { class: "icon-btn", title: "Reset", text: "✕", onclick: () => api("permission_remove", { origin: p.origin, permission: p.permission }).then(loadPerms) })));
+}
+for (const input of document.querySelectorAll("[data-key]")) {
+  input.addEventListener("change", async () => {
+    const value = input.type === "checkbox" ? input.checked : input.value;
+    try { settings = await api("settings_set", { patch: { [input.dataset.key]: value } }); }
+    catch (e) { alert(e.message); load(); }
+    if (input.dataset.key === "theme") location.reload();
+  });
+}
+document.getElementById("clearbtn").onclick = async () => {
+  const g = id => document.getElementById(id).checked;
+  const r = await api("clear_browsing_data", { history: g("c-history"), cookies: g("c-cookies"), cache: g("c-cache"), site_data: g("c-site"), downloads: g("c-downloads") });
+  alert("Cleared: " + (r.cleared.join(", ") || "nothing"));
+};
+load();

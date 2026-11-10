@@ -1,0 +1,49 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<link rel="icon" href="ferrite://app/icon.svg">
+<link rel="stylesheet" href="ferrite://app/common.css">
+<script src="ferrite://app/common.js"></script>
+</head>
+<body>
+<div class="page">
+  <h1>Settings</h1>
+  <h2>Appearance</h2>
+  <div class="card">
+    <div class="row"><div class="grow">Theme</div><select data-key="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
+    <div class="row"><div class="grow">Show bookmarks bar</div><input type="checkbox" data-key="show_bookmarks_bar"></div>
+  </div>
+  <h2>On startup</h2>
+  <div class="card">
+    <div class="row"><div class="grow">When Ferrite starts</div><select data-key="startup"><option value="restore_session">Continue where you left off</option><option value="new_tab">Open the New Tab page</option><option value="homepage">Open the home page</option></select></div>
+    <div class="row"><div class="grow">Home page</div><input data-key="homepage" style="width:340px"></div>
+    <div class="row"><div class="grow">Restore tabs after a crash</div><input type="checkbox" data-key="restore_after_crash"></div>
+  </div>
+  <h2>Search</h2>
+  <div class="card">
+    <div class="row"><div class="grow">Search engine used in the address bar</div><select data-key="search_engine" id="engines"></select></div>
+    <div class="row"><div class="grow">Custom search URL <span class="muted">(use %s for the query)</span></div><input data-key="custom_search_url" style="width:340px" placeholder="https://example.com/search?q=%s"></div>
+  </div>
+  <h2>Downloads</h2>
+  <div class="card">
+    <div class="row"><div class="grow">Save files to</div><input data-key="download_dir" style="width:340px"></div>
+    <div class="row"><div class="grow">Ask where to save each file</div><input type="checkbox" data-key="ask_download_location"></div>
+  </div>
+  <h2>Privacy</h2>
+  <div class="card">
+    <div class="row"><div class="grow">Send a “Do Not Track” request <span class="muted">(applies after restart)</span></div><input type="checkbox" data-key="send_do_not_track"></div>
+    <div class="row"><div class="grow">Block trackers and ads <span class="muted">(filter lists; applies after restart)</span></div><input type="checkbox" data-key="adblock_enabled"></div>
+  </div>
+  <h2>Clear browsing data</h2>
+  <div class="card">
+    <div class="row"><label><input type="checkbox" id="c-history" checked> History</label><label><input type="checkbox" id="c-cookies"> Cookies</label><label><input type="checkbox" id="c-cache" checked> Cached files</label><label><input type="checkbox" id="c-site"> Site storage <span class="muted">(next start)</span></label><label><input type="checkbox" id="c-downloads"> Download list</label><div class="grow"></div><button class="btn danger" id="clearbtn">Clear</button></div>
+  </div>
+  <h2>Site permissions</h2>
+  <div class="card" id="perms"></div>
+  <h2>About</h2>
+  <div class="card"><div class="row"><div class="grow" id="about"></div><a href="ferrite://about/">Details</a></div></div>
+</div>
+<script src="ferrite://app/settings.js"></script>
+</body></html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Downloads</title>
+<link rel="icon" href="ferrite://app/icon.svg">
+<link rel="stylesheet" href="ferrite://app/common.css">
+<script src="ferrite://app/common.js"></script>
+</head>
+<body>
+<div class="page">
+  <h1>Downloads</h1>
+  <div class="toolbar"><input type="search" id="q" placeholder="Search downloads"><button class="btn" id="clear">Clear finished</button></div>
+  <div id="list" class="card"></div>
+</div>
+<style>
+  .bar { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .warn { color: var(--warn); font-size: 12px; }
+</style>
+<script src="ferrite://app/downloads.js"></script>
+</body></html>
