@@ -48,6 +48,9 @@ function letterFor(pageUrl) {
 }
 function favicon(url, pageUrl) {
   if (pageUrl && pageUrl.startsWith("ferrite:")) url = ICON;
+  // Unloaded (restored or sleeping) tabs have no reported favicon yet: try
+  // the site's conventional /favicon.ico before falling back to a letter.
+  if (!url && /^https?:/.test(pageUrl || "")) { try { url = new URL(pageUrl).origin + "/favicon.ico"; } catch (_) {} }
   if (!url) return letterFor(pageUrl);
   const img = document.createElement("img");
   img.alt = "";

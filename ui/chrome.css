@@ -53,7 +53,8 @@ button { cursor: default; }
 .tab.pinned { flex: 0 0 44px; width: 44px; padding: 0; justify-content: center; }
 .tab.pinned .tab-title, .tab.pinned .tab-close { display: none; }
 .tab.closing { opacity: .4; }
-.tab.sleeping .tab-icon { opacity: .5; filter: grayscale(1); }
+.tab.sleeping .tab-icon { opacity: .5; }
+.tab.sleeping .tab-title { color: var(--ink-3); }
 .tab.drag-over-left { box-shadow: inset 2px 0 0 var(--accent); }
 .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--accent); }
 .tab-icon { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
@@ -191,3 +192,6 @@ body::after { content: ""; height: 1px; background: var(--line); flex: none; }
 :root[data-side] #newtab { width: auto; height: 34px; border-radius: 8px; justify-content: flex-start; padding-left: 12px; gap: 10px; margin: 2px 0 0; color: var(--ink-3); }
 :root[data-side] #newtab::after { content: "New tab"; font-size: 12.5px; }
 :root[data-side] #newtab:hover { background: var(--hover); color: var(--ink); }
+/* Sleeping tabs use the site's /favicon.ico, which is often dark-on-light
+   (e.g. GitHub): give it a small light chip so it stays visible. */
+:root:not([data-theme="light"]) .tab.sleeping .tab-icon img { background: rgba(255,255,255,.88); border-radius: 4px; padding: 1px; }
