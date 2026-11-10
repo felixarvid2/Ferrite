@@ -104,8 +104,11 @@ function applyTheme(t) {
   const dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
-try { const c = localStorage.getItem("ferrite-theme"); if (c) applyTheme(c); } catch (_) {}
+let themePref = "dark";
+try { const c = localStorage.getItem("ferrite-theme"); if (c) { themePref = c; applyTheme(c); } } catch (_) {}
+// Follow OS changes live when the preference is "system".
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (themePref === "system") applyTheme("system"); });
 api("settings_get").then(r => {
-  applyTheme(r.settings.theme);
+  themePref = r.settings.theme; applyTheme(themePref);
   try { localStorage.setItem("ferrite-theme", r.settings.theme); } catch (_) {}
 }).catch(() => {});

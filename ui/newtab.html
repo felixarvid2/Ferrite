@@ -10,28 +10,33 @@
 </head>
 <body>
 <style>
-  body { min-height: 100vh; background:
-    radial-gradient(900px 500px at 15% -10%, var(--accent-soft), transparent 70%),
-    radial-gradient(700px 420px at 95% 5%, rgba(160,120,255,.08), transparent 70%), var(--bg); background-attachment: fixed; }
-  :root[data-private] { --accent: #b48cff; --accent-fg: #1a0c33; --accent-soft: rgba(180,140,255,.16); --accent-ring: rgba(180,140,255,.5); --bg: #14111b; --bg2: #1d1928; --bg3: #2a2438; --border: #302a40; --border-strong: #463e5e; }
-  :root[data-private][data-theme="light"] { --accent: #6d3fd1; --accent-fg: #fff; --accent-soft: rgba(109,63,209,.1); --accent-ring: rgba(109,63,209,.4); --bg: #f4f0fb; --bg2: #fff; --bg3: #ebe5f7; --border: #e0d8f0; --border-strong: #cdc2e6; }
+  body { min-height: 100vh; background: var(--bg); }
+  :root[data-private] { --accent: #b48cff; --accent-fg: #1a0c33; --accent-soft: rgba(180,140,255,.16); --accent-ring: rgba(180,140,255,.55); --bg: #14111b; --bg2: #1d1928; --bg3: #2a2438; --border: #302a40; --border-strong: #463e5e; --card-border: rgba(255,255,255,.07); }
+  :root[data-private][data-theme="light"] { --accent: #6d3fd1; --accent-fg: #fff; --accent-soft: rgba(109,63,209,.1); --accent-ring: rgba(109,63,209,.5); --bg: #f4f0fb; --bg2: #fff; --bg3: #ebe5f7; --border: #e0d8f0; --border-strong: #cdc2e6; --card-border: rgba(0,0,0,.08); }
   .nt { max-width: 720px; margin: 0 auto; padding: 14vh 24px 48px; text-align: center; }
-  .clock { font-size: 76px; font-weight: 300; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
-  .greet { margin: 10px 0 34px; font-size: 17px; color: var(--fg2); }
+  .hero { position: relative; isolation: isolate; }
+  .hero::before { content: ""; position: absolute; left: 50%; top: 40%; width: 640px; height: 360px; transform: translate(-50%, -50%); z-index: -1; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(120,140,255,.10), transparent); }
+  :root[data-theme="light"] .hero::before { background: radial-gradient(closest-side, rgba(65,87,230,.08), transparent); }
+  .clock { font-size: 76px; font-weight: 200; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .greet { margin: 12px 0 34px; font-size: 16px; color: var(--date); }
   .badge { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 5px 12px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 12px; }
-  .search { position: relative; }
-  .search svg { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--fg3); pointer-events: none; }
-  .search input { width: 100%; padding: 16px 22px 16px 52px; font-size: 16px; border-radius: 99px; background: var(--bg2); box-shadow: var(--shadow-2); border-color: var(--border); }
-  .search input:focus { box-shadow: var(--shadow-2), 0 0 0 4px var(--accent-soft); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; margin-top: 44px; }
-  .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 8px 14px; border-radius: var(--radius-lg); text-decoration: none; color: var(--fg); border: 1px solid transparent;
-    transition: background var(--dur), transform .2s var(--ease), border-color var(--dur), box-shadow var(--dur); }
-  .tile:hover { background: var(--bg2); border-color: var(--border); box-shadow: var(--shadow-1); transform: translateY(-2px); text-decoration: none; }
-  .tile .ic { width: 48px; height: 48px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--border); display: grid; place-items: center; box-shadow: var(--shadow-1); }
-  :root[data-theme="dark"] .tile .ic { background: #eceef3; border-color: transparent; }
-  .tile .ic img.fav { width: 26px; height: 26px; border-radius: 6px; }
-  .tile .ic .avatar { width: 48px; height: 48px; border-radius: 14px; font-size: 20px; margin: -1px; }
-  .tile span.name { font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg2); }
+  .search { position: relative; max-width: 560px; margin: 0 auto; }
+  .search svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--fg3); pointer-events: none; }
+  .search input { width: 100%; height: 48px; padding: 0 22px 0 48px; font-size: 15px; border-radius: 99px; background: var(--bg2); box-shadow: none; border: 1px solid rgba(255,255,255,.10); }
+  :root[data-theme="light"] .search input { border-color: rgba(0,0,0,.12); box-shadow: var(--shadow-1); }
+  .search input:hover { border-color: rgba(255,255,255,.18); }
+  :root[data-theme="light"] .search input:hover { border-color: rgba(0,0,0,.2); }
+  .search input:focus, .search input:focus-visible { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, 112px); justify-content: center; gap: 12px; margin-top: 44px; }
+  .tile { width: 112px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px; border-radius: 14px; text-decoration: none; color: var(--fg); background: var(--tile-bg);
+    transition: background var(--t), transform var(--t); }
+  .tile:hover { background: var(--tile-bg-hover); transform: translateY(-1px); text-decoration: none; }
+  .tile .ic { width: 56px; height: 56px; border-radius: 12px; background: #eceef3; display: grid; place-items: center; overflow: hidden; flex: none; }
+  :root[data-theme="light"] .tile .ic { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
+  .tile .ic img.fav { width: 28px; height: 28px; border-radius: 6px; }
+  .tile .ic .avatar { width: 56px; height: 56px; border-radius: 12px; font-size: 24px; }
+  .tile span.name { font-size: 13px; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--tile-cap); }
   .private { margin: 28px auto 0; max-width: 540px; padding: 18px 20px; text-align: left; color: var(--fg2); line-height: 1.6; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .private h2 { margin: 0 0 6px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); display: flex; gap: 8px; align-items: center; }
   .private h2 svg { color: var(--accent); }
@@ -41,8 +46,8 @@
 </style>
 <div class="nt">
   <div class="badge" id="badge" hidden></div>
-  <div class="clock" id="clock">&nbsp;</div>
-  <div class="greet" id="greet"></div>
+  <div class="hero"><div class="clock" id="clock">&nbsp;</div>
+  <div class="greet" id="greet"></div></div>
   <form id="f" class="search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
     <input id="q" placeholder="Search the web or type an address" autocomplete="off" spellcheck="false" autofocus></form>
   <div class="tiles" id="tiles"></div>
