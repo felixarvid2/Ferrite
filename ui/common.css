@@ -140,3 +140,10 @@ input[type=search]::-webkit-search-cancel-button { display: none; }
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; scroll-behavior: auto !important; }
 }
 label { display: inline-flex; align-items: center; cursor: pointer; }
+
+/* Field-line band behind internal page headers (see drawHeaderField). */
+.shell > main.page { position: relative; }
+.page-field { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0;
+  mask-image: linear-gradient(to bottom, #000 35%, transparent), linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+  mask-composite: intersect; }
+.shell > main.page > :not(.page-field) { position: relative; z-index: 1; }

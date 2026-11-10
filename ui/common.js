@@ -112,3 +112,64 @@ api("settings_get").then(r => {
   themePref = r.settings.theme; applyTheme(themePref);
   try { localStorage.setItem("ferrite-theme", r.settings.theme); } catch (_) {}
 }).catch(() => {});
+
+// Ferrite's field-line motif, shared by internal pages: a faint band of
+// magnetic field lines behind the page header (the New Tab page draws a
+// larger version itself). Static; redrawn on resize and theme change.
+function drawHeaderField(cv) {
+  const host = cv.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  const w = host.clientWidth, h = 210;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  cv.style.width = w + "px"; cv.style.height = h + "px";
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  const light = document.documentElement.dataset.theme === "light";
+  const rgb = light ? "65,87,230" : "124,140,255";
+  const cy = 64, span = Math.min(w * 0.34, 340);
+  const poles = [{ x: w / 2 - span, y: cy, q: 1 }, { x: w / 2 + span, y: cy, q: -1 }];
+  const field = (x, y) => {
+    let fx = 0, fy = 0;
+    for (const p of poles) {
+      const dx = x - p.x, dy = y - p.y, r2 = dx * dx + dy * dy + 30, r3 = r2 * Math.sqrt(r2);
+      fx += p.q * dx / r3; fy += p.q * dy / r3;
+    }
+    const m = Math.hypot(fx, fy) || 1;
+    return [fx / m, fy / m];
+  };
+  const trace = (x, y, dir) => {
+    g.moveTo(x, y);
+    for (let i = 0; i < 700; i++) {
+      const [fx, fy] = field(x, y);
+      x += fx * 4 * dir; y += fy * 4 * dir;
+      g.lineTo(x, y);
+      const end = dir > 0 ? poles[1] : poles[0];
+      if (Math.hypot(x - end.x, y - end.y) < 16 || x < -40 || x > w + 40 || y < -40 || y > h + 40) break;
+    }
+  };
+  g.setLineDash([3, 7]); g.lineCap = "round"; g.lineWidth = 1.1;
+  g.strokeStyle = `rgba(${rgb},${light ? 0.2 : 0.26})`;
+  for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
+    const y = cy + side * (10 + Math.pow(i / 5, 1.5) * 150);
+    g.beginPath(); trace(w / 2, y, 1); trace(w / 2, y, -1); g.stroke();
+  }
+  for (const p of poles) {
+    const r = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 48);
+    r.addColorStop(0, `rgba(${rgb},${light ? 0.14 : 0.2})`); r.addColorStop(1, `rgba(${rgb},0)`);
+    g.fillStyle = r; g.beginPath(); g.arc(p.x, p.y, 48, 0, Math.PI * 2); g.fill();
+  }
+}
+function setupHeaderField() {
+  const main = document.querySelector(".shell > main.page");
+  if (!main || main.querySelector(".page-field")) return;
+  const cv = document.createElement("canvas");
+  cv.className = "page-field"; cv.setAttribute("aria-hidden", "true");
+  main.prepend(cv);
+  const redraw = () => drawHeaderField(cv);
+  let t = 0;
+  addEventListener("resize", () => { clearTimeout(t); t = setTimeout(redraw, 120); });
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  redraw();
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setupHeaderField); else setupHeaderField();
