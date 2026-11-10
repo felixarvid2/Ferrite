@@ -115,8 +115,12 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 ## Not verified
 
-- YouTube: Google returned its "unusual traffic" page for the test container's
-  datacenter IP, so YouTube could not be tested.
+- YouTube video: www.youtube.com redirected to Google's "unusual traffic" page
+  for the test container's datacenter IP. Through an embed iframe the YouTube
+  player loaded and rendered but answered "Video unavailable" (server-side
+  refusal for this IP). Opening an `/embed/` URL directly shows "Error 153",
+  which YouTube shows in any browser without an embedding page. YouTube serves
+  VP9/AV1 + Opus, which play in Ferrite (see Media playback).
 - Gmail and Google Docs: only the sign-in page was reached (no account).
 - Login and OAuth flows: not tested end to end.
 - Hardware acceleration and WebGL on a real GPU. WebGL was unavailable in the

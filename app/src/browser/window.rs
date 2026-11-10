@@ -155,6 +155,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
         init.maximized,
         init.private,
         !s.settings.system_titlebar,
+        theme::frame_color(&s.settings, init.private),
     );
     let window = window_create_top_level(Some(&mut delegate));
     if let Some(w) = s.windows.get_mut(&id) {
@@ -300,6 +301,7 @@ wrap_window_delegate! {
         maximized: bool,
         private: bool,
         frameless: bool,
+        frame_color: u32,
     }
 
     impl ViewDelegate {
@@ -334,7 +336,7 @@ wrap_window_delegate! {
                 // Web content is a native child window that swallows mouse
                 // events, so leave a thin frame for resizing from the edges.
                 window.set_insets(Some(&Insets { top: 0, left: RESIZE_BORDER, bottom: RESIZE_BORDER, right: RESIZE_BORDER }));
-                window.set_background_color(0xFF1B1C20);
+                window.set_background_color(self.frame_color);
             }
             window.show();
             if self.maximized {

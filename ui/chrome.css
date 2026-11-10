@@ -1,19 +1,19 @@
 /* Ferrite toolbar. The page is the hero: the chrome stays quiet, one
    memorable detail is the active tab growing out of the toolbar. */
 :root {
-  --frame: #1b1c20; --bar: #2a2c31; --field: #1d1e22; --field-hover: #232428;
+  --frame: #141518; --bar: #222429; --field: #2b2d33; --field-hover: #31343a;
   --ink: #ebebee; --ink-2: #a4a7af; --ink-3: #75787f; --line: #3a3c42;
   --hover: rgba(255,255,255,.07); --press: rgba(255,255,255,.11);
-  --accent: #82a8ff; --accent-ink: #0c1530; --danger: #ff7a70; --warn: #f2c14e;
+  --accent: #7c8cff; --accent-ink: #0c1238; --field-line: rgba(255,255,255,.08); --danger: #ff7a70; --warn: #f2c14e;
   --tab-h: 34px; --bar-h: 42px; --radius-tab: 10px;
 }
 :root[data-theme="light"] {
   --frame: #dde1e8; --bar: #ffffff; --field: #eef0f4; --field-hover: #e6e9ef;
   --ink: #1d1e22; --ink-2: #555a63; --ink-3: #868a92; --line: #d2d6dd;
   --hover: rgba(0,0,0,.06); --press: rgba(0,0,0,.1);
-  --accent: #2b5de0; --accent-ink: #ffffff; --danger: #c9372c; --warn: #a86a00;
+  --accent: #4157e6; --accent-ink: #ffffff; --field-line: rgba(0,0,0,.08); --danger: #c9372c; --warn: #a86a00;
 }
-:root[data-private] { --frame: #241b33; --bar: #33284a; --field: #211a2e; --field-hover: #2a2139; --line: #463a5f; --accent: #b79bff; }
+:root[data-private] { --frame: #1a1325; --bar: #281e3a; --field: #33284a; --field-hover: #3a2e53; --line: #463a5f; --accent: #b79bff; --field-line: rgba(255,255,255,.08); }
 
 html, body { overflow: hidden; user-select: none; background: var(--frame); color: var(--ink); }
 body { display: flex; flex-direction: column; font: 13px/1.35 system-ui, "Segoe UI", "Noto Sans", sans-serif; }
@@ -56,7 +56,7 @@ button { cursor: default; }
 .tab.drag-over-right { box-shadow: inset -2px 0 0 var(--accent); }
 .tab-icon { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
 .tab-icon img { width: 16px; height: 16px; border-radius: 3px; }
-.letter { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+.letter { width: 15px; height: 15px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
   font-size: 10px; font-weight: 700; color: #fff; text-transform: uppercase; }
 .spinner { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent);
   border-radius: 50%; animation: spin .7s linear infinite; }
@@ -90,10 +90,11 @@ button { cursor: default; }
 #reload .i-stop { display: none; }
 #reload.loading .i-stop { display: block; }
 #reload.loading .i-reload { display: none; }
-#omnibox { flex: 1; position: relative; display: flex; align-items: center; height: 34px; margin: 0 8px; padding: 0 4px 0 6px; gap: 4px;
-  background: var(--field); border-radius: 17px; min-width: 0; transition: background-color .12s, box-shadow .12s; }
+#omnibox { flex: 1; position: relative; display: flex; align-items: center; height: 36px; margin: 0 8px; padding: 0 4px 0 8px; gap: 4px;
+  background: var(--field); border-radius: 18px; min-width: 0; box-shadow: inset 0 0 0 1px var(--field-line);
+  transition: background-color .12s ease-out, box-shadow .12s ease-out; }
 #omnibox:hover { background: var(--field-hover); }
-#omnibox:focus-within { background: var(--field); box-shadow: 0 0 0 2px var(--accent); }
+#omnibox:focus-within { background: var(--field); box-shadow: inset 0 0 0 1px var(--field-line), 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
 #address, #address-view { flex: 1; min-width: 0; height: 32px; font-size: 14px; letter-spacing: .005em; }
 #address { border: 0; background: none; padding: 0 2px; user-select: text; color: var(--ink); outline: none; }
 #address::placeholder { color: var(--ink-3); }
@@ -131,11 +132,12 @@ button { cursor: default; }
 .sg mark { background: none; color: var(--ink); font-weight: 600; }
 
 /* ---- bookmarks bar ------------------------------------------------ */
-#bookmarks { display: flex; align-items: center; gap: 2px; height: 32px; padding: 0 8px 4px; background: var(--bar); overflow: hidden; }
-.bm { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px 0 8px; border-radius: 13px; max-width: 190px; color: var(--ink); flex: none; }
+#bookmarks { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 4px; background: var(--bar); overflow: hidden; }
+.bm { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 6px; border-radius: 6px; max-width: 190px; color: var(--ink); flex: none;
+  transition: background-color .12s ease-out; }
 .bm:hover { background: var(--hover); }
 .bm img, .bm .letter { width: 14px; height: 14px; font-size: 9px; }
-.bm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.bm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 #bookmarks .empty-hint { color: var(--ink-3); font-size: 12px; padding-left: 6px; }
 
 /* ---- bars below the toolbar -------------------------------------- */

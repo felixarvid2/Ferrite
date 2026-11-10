@@ -64,7 +64,8 @@ function renderTabs() {
     node.classList.toggle("pinned", t.pinned);
     node.classList.toggle("closing", t.closing);
     node.classList.toggle("sleeping", !!t.sleeping);
-    const title = t.title || (t.url === "ferrite://newtab/" ? "New Tab" : t.url) || "New Tab";
+    let host = ""; try { host = new URL(t.url).hostname.replace(/^www\./, ""); } catch (_) {}
+    const title = t.title || (t.url === "ferrite://newtab/" ? "New Tab" : host || t.url) || "New Tab";
     node.title = title;
     node.querySelector(".tab-title").textContent = title;
     const icon = node.querySelector(".tab-icon");
@@ -127,7 +128,7 @@ function renderNav() {
   const sec = $("security");
   if (!nav.display_url) nav = Object.assign({}, nav, { security: "" }); // New Tab page: no chip
   sec.className = nav.security || "";
-  sec.innerHTML = { secure: LOCK, insecure: WARN + "Not secure", error: WARN + "Not private", internal: ICON_SVG + "Ferrite", local: INFO + "File" }[nav.security] || "";
+  sec.innerHTML = { secure: LOCK, insecure: WARN + "Not secure", error: WARN + "Not private", internal: "", local: INFO + "File" }[nav.security] || "";
   sec.title = { secure: "Connection is secure (HTTPS)", insecure: "This connection is not encrypted", error: "The certificate of this site is not valid", local: "Local file" }[nav.security] || "";
   const zoom = $("zoom");
   zoom.hidden = !nav.zoom || nav.zoom === 100;
@@ -165,10 +166,10 @@ function paintAddressView(url) {
 function renderBookmarks() {
   const bar = $("bookmarks");
   const items = state.bookmarks_bar;
-  bar.hidden = items == null || state.private;
+  // An empty bar is noise: it appears with the first bookmark.
+  bar.hidden = items == null || state.private || !items.length;
   if (bar.hidden) return;
   bar.replaceChildren();
-  if (!items.length) { bar.append(el("span", "empty-hint", "Bookmarks you add with Ctrl+D appear here")); return; }
   for (const b of items) {
     const n = el("div", "bm");
     n.title = b.url ? `${b.title}\n${b.url}` : b.title;

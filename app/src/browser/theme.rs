@@ -13,6 +13,16 @@ pub fn window_background(settings: &Settings) -> u32 {
     }
 }
 
+/// Colour of the thin resize frame around frameless windows (matches the
+/// tab strip in ui/chrome.css).
+pub fn frame_color(settings: &Settings, private: bool) -> u32 {
+    match (private, settings.theme) {
+        (true, _) => 0xFF1A_1325,
+        (false, Theme::Light) => 0xFFDD_E1E8,
+        _ => 0xFF14_1518,
+    }
+}
+
 /// Tell Chromium which colour scheme to use for its own UI (dialogs, menus,
 /// internal chrome:// pages) in the given context (None = profile context).
 pub fn apply_to_context(state: &State, ctx: Option<&RequestContext>) {
