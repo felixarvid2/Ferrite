@@ -14,6 +14,9 @@ use ferrite_core::closed_tabs::ClosedTabs;
 use std::cell::Cell;
 use std::rc::Rc;
 
+/// Width (px) of the resize frame around frameless windows.
+const RESIZE_BORDER: i32 = 4;
+
 pub const UI_URL: &str = "ferrite://app/chrome.html";
 /// Height of the UI strip before the page reports its real height.
 const INITIAL_UI_HEIGHT: i32 = 78;
@@ -327,6 +330,12 @@ wrap_window_delegate! {
             }
             let title = if self.private { "Ferrite (Private)" } else { "Ferrite" };
             window.set_title(Some(&cef_str(title)));
+            if self.frameless {
+                // Web content is a native child window that swallows mouse
+                // events, so leave a thin frame for resizing from the edges.
+                window.set_insets(Some(&Insets { top: 0, left: RESIZE_BORDER, bottom: RESIZE_BORDER, right: RESIZE_BORDER }));
+                window.set_background_color(0xFF1B1C20);
+            }
             window.show();
             if self.maximized {
                 window.maximize();
@@ -363,6 +372,20 @@ wrap_window_delegate! {
 
         fn on_window_bounds_changed(&self, _window: Option<&mut Window>, _bounds: Option<&Rect>) {
             later(|s| s.schedule_session_save());
+        }
+
+        // cef-rs defaults these to 0 (CEF's C++ defaults are true): without
+        // them the window cannot be resized, maximized or minimized.
+        fn can_resize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_maximize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_minimize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
         }
 
         fn is_frameless(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {

@@ -89,11 +89,23 @@ Network traffic went through an HTTPS-intercepting proxy.
   openbox; minimize/maximize/close buttons are drawn by the UI.
   Settings > Appearance > "Use system title bar" (`system_titlebar`) turns the
   desktop's title bar back on (takes effect for new windows).
-- Not checked: frameless resizing from the window edges on GNOME/KDE, Wayland.
+- Resizing: dragging the bottom-right corner (1280x860 -> 1130x760) and the
+  left edge resized the window under openbox. Frameless windows keep a 4 px
+  frame because web content is a native child window that would swallow edge
+  clicks. (Before this fix windows were not resizable at all: cef-rs defaults
+  `WindowDelegate::can_resize/can_maximize/can_minimize` to false.)
+- Not checked: GNOME/KDE window managers, Wayland.
 
 ### Release bundle
 
 - The release bundle in `dist/` runs standalone with the embedded UI.
+
+### Media playback
+
+- WebM (VP9) video plays: 960x540, `currentTime` advances (MDN's `flower.webm`
+  served locally); MP3 audio plays.
+- MP4 (H.264/AAC) does not: `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`, as expected
+  for CEF builds without proprietary codecs (see Known limitations).
 
 ### Web platform probe
 
