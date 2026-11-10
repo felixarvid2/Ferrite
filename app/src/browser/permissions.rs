@@ -97,6 +97,13 @@ fn request(
     perms: Vec<String>,
     reply: PromptReply,
 ) {
+    // Internal pages never get permissions and never prompt (e.g. the New
+    // Tab page loading a localhost favicon triggers Chromium's local-network
+    // permission).
+    if super::scheme::is_internal(&origin) {
+        reply.send(false);
+        return;
+    }
     let Some(tab) = s.tab_of_browser(browser_id) else {
         reply.send(false);
         return;

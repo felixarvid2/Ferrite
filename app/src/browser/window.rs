@@ -371,7 +371,16 @@ wrap_window_delegate! {
             }
         }
 
-        fn on_window_bounds_changed(&self, _window: Option<&mut Window>, _bounds: Option<&Rect>) {
+        fn on_window_bounds_changed(&self, window: Option<&mut Window>, _bounds: Option<&Rect>) {
+            // The resize frame is only useful for a normal (restored) window.
+            if let (Some(_), Some(window)) = (self.frameless, window) {
+                let edge = window.is_maximized() == 0 && window.is_fullscreen() == 0;
+                let border = if edge { RESIZE_BORDER } else { 0 };
+                if window.insets().left != border {
+                    window.set_insets(Some(&Insets { top: 0, left: border, bottom: border, right: border }));
+                    window.layout();
+                }
+            }
             later(|s| s.schedule_session_save());
         }
 

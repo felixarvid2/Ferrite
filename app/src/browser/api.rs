@@ -506,7 +506,11 @@ fn clear_browsing_data(s: &mut State, win: WinId, args: &Value) -> Result<Value>
         ctx.clear_http_cache(None);
         done.push("cache");
     }
-    if arg_bool(args, "site_data") {
+    if arg_bool(args, "site_data") && s.is_private(win) {
+        // Private storage is in memory and disappears with the window; the
+        // on-start marker would wipe the normal profile instead.
+        done.push("site_data (private: discarded on close)");
+    } else if arg_bool(args, "site_data") {
         // Chromium offers no in-process "clear all storage" call to
         // embedders; schedule removal before the next start instead.
         let _ = std::fs::write(s.paths.root.join("clear-site-data"), b"1");

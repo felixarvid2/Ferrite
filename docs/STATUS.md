@@ -94,6 +94,12 @@ Network traffic went through an HTTPS-intercepting proxy.
   frame because web content is a native child window that would swallow edge
   clicks. (Before this fix windows were not resizable at all: cef-rs defaults
   `WindowDelegate::can_resize/can_maximize/can_minimize` to false.)
+- Maximized and fullscreen windows drop the resize frame (content reaches the
+  screen edge; checked by screenshot), and it returns when restored. F11 and
+  HTML5 video fullscreen were checked; in HTML5 fullscreen the video fills the
+  screen and the UI strip is hidden.
+- "Use system title bar": a new window gets the window manager's title bar and
+  no Ferrite window buttons (checked under openbox).
 - Not checked: GNOME/KDE window managers, Wayland.
 
 ### Release bundle
