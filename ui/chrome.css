@@ -6,16 +6,14 @@
   --hover: rgba(255,255,255,.07); --press: rgba(255,255,255,.11);
   --accent: #7c8cff; --accent-ink: #0c1238; --field-line: rgba(255,255,255,.08); --danger: #ff7a70; --warn: #f2c14e;
   --tab-h: 34px; --bar-h: 42px; --radius-tab: 10px;
-  --field-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 460 42'%3E%3Cg fill='none' stroke='%237c8cff' stroke-opacity='.22' stroke-dasharray='2 5' stroke-linecap='round'%3E%3Cpath d='M70 21C150-6 310-6 390 21'/%3E%3Cpath d='M70 21C150 6 310 6 390 21'/%3E%3Cpath d='M70 21h320'/%3E%3Cpath d='M70 21C150 36 310 36 390 21'/%3E%3Cpath d='M70 21C150 48 310 48 390 21'/%3E%3C/g%3E%3Cg fill='%237c8cff' fill-opacity='.35'%3E%3Ccircle cx='70' cy='21' r='2'/%3E%3Ccircle cx='390' cy='21' r='2'/%3E%3C/g%3E%3C/svg%3E");
 }
 :root[data-theme="light"] {
   --frame: #dde1e8; --bar: #ffffff; --field: #eef0f4; --field-hover: #e6e9ef;
   --ink: #1d1e22; --ink-2: #555a63; --ink-3: #868a92; --line: #d2d6dd;
   --hover: rgba(0,0,0,.06); --press: rgba(0,0,0,.1);
-  --accent: #4157e6; --accent-ink: #ffffff; --field-line: rgba(0,0,0,.08);
-  --field-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 460 42'%3E%3Cg fill='none' stroke='%234157e6' stroke-opacity='.18' stroke-dasharray='2 5' stroke-linecap='round'%3E%3Cpath d='M70 21C150-6 310-6 390 21'/%3E%3Cpath d='M70 21C150 6 310 6 390 21'/%3E%3Cpath d='M70 21h320'/%3E%3Cpath d='M70 21C150 36 310 36 390 21'/%3E%3Cpath d='M70 21C150 48 310 48 390 21'/%3E%3C/g%3E%3Cg fill='%234157e6' fill-opacity='.35'%3E%3Ccircle cx='70' cy='21' r='2'/%3E%3Ccircle cx='390' cy='21' r='2'/%3E%3C/g%3E%3C/svg%3E"); --danger: #c9372c; --warn: #a86a00;
+  --accent: #4157e6; --accent-ink: #ffffff; --field-line: rgba(0,0,0,.08); --danger: #c9372c; --warn: #a86a00;
 }
-:root[data-private] { --frame: #1a1325; --bar: #281e3a; --field: #33284a; --field-hover: #3a2e53; --line: #463a5f; --accent: #b79bff; --field-line: rgba(255,255,255,.08); --field-lines: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 460 42'%3E%3Cg fill='none' stroke='%23b79bff' stroke-opacity='.22' stroke-dasharray='2 5' stroke-linecap='round'%3E%3Cpath d='M70 21C150-6 310-6 390 21'/%3E%3Cpath d='M70 21C150 6 310 6 390 21'/%3E%3Cpath d='M70 21h320'/%3E%3Cpath d='M70 21C150 36 310 36 390 21'/%3E%3Cpath d='M70 21C150 48 310 48 390 21'/%3E%3C/g%3E%3Cg fill='%23b79bff' fill-opacity='.35'%3E%3Ccircle cx='70' cy='21' r='2'/%3E%3Ccircle cx='390' cy='21' r='2'/%3E%3C/g%3E%3C/svg%3E"); }
+:root[data-private] { --frame: #1a1325; --bar: #281e3a; --field: #33284a; --field-hover: #3a2e53; --line: #463a5f; --accent: #b79bff; --field-line: rgba(255,255,255,.08); }
 
 html, body { overflow: hidden; user-select: none; background: var(--frame); color: var(--ink); }
 body { display: flex; flex-direction: column; font: 13px/1.35 system-ui, "Segoe UI", "Noto Sans", sans-serif; }
@@ -81,9 +79,6 @@ button { cursor: default; }
 :root[data-frameless] #tabstrip { app-region: drag; -webkit-app-region: drag; }
 :root[data-frameless] #tabstrip .tab, :root[data-frameless] #tabstrip button, :root[data-frameless] #private-badge { app-region: no-drag; -webkit-app-region: no-drag; }
 #drag-space { flex: 1; align-self: stretch; min-width: 24px; }
-/* Field lines in the empty part of the strip: Ferrite's motif, barely there. */
-#drag-space { background: var(--field-lines) right center / 460px 42px no-repeat; opacity: .9;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%); mask-image: linear-gradient(90deg, transparent, #000 40%); }
 #private-badge { margin-left: 0 !important; }
 #winctl { display: flex; align-self: flex-start; margin: 7px 0 0 8px; gap: 6px; }
 .wc { width: 26px; height: 26px; border-radius: 50%; border: 0; background: var(--hover); color: var(--ink-2);
