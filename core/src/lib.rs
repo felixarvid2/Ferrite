@@ -1,5 +1,6 @@
 //! Engine-independent logic for the Ferrite browser. Must not depend on CEF.
 
+pub mod blocker;
 pub mod bookmarks;
 pub mod closed_tabs;
 pub mod commands;

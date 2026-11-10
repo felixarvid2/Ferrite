@@ -10,6 +10,54 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Send `DNT: 1` and `Sec-GPC: 1` with every request (privacy setting).
 pub static SEND_DNT: AtomicBool = AtomicBool::new(false);
+/// Ad/tracker blocking switch and the loaded filter engine (IO thread reads).
+pub static ADBLOCK: AtomicBool = AtomicBool::new(false);
+pub static BLOCKER: std::sync::RwLock<Option<std::sync::Arc<ferrite_core::blocker::Blocker>>> =
+    std::sync::RwLock::new(None);
+
+/// Load cached filter lists, then refresh stale ones, off the UI thread.
+pub fn start_blocker(lists_dir: std::path::PathBuf) {
+    std::thread::spawn(move || {
+        use ferrite_core::blocker::{update_lists, Blocker};
+        let install = |b: Option<Blocker>| {
+            if let (Some(b), Ok(mut slot)) = (b, BLOCKER.write()) {
+                tracing::info!("content blocker ready ({} lists)", b.rule_lists);
+                *slot = Some(std::sync::Arc::new(b));
+            }
+        };
+        install(Blocker::load_dir(&lists_dir));
+        match update_lists(&lists_dir) {
+            Ok(0) => {}
+            Ok(n) => {
+                tracing::info!("updated {n} filter lists");
+                install(Blocker::load_dir(&lists_dir));
+            }
+            Err(err) => tracing::warn!("filter list update failed: {err:#}"),
+        }
+    });
+}
+
+fn adblock_type(t: ResourceType) -> &'static str {
+    match t {
+        t if t == ResourceType::MAIN_FRAME => "document",
+        t if t == ResourceType::SUB_FRAME => "sub_frame",
+        t if t == ResourceType::STYLESHEET => "stylesheet",
+        t if t == ResourceType::SCRIPT
+            || t == ResourceType::WORKER
+            || t == ResourceType::SHARED_WORKER
+            || t == ResourceType::SERVICE_WORKER =>
+        {
+            "script"
+        }
+        t if t == ResourceType::IMAGE || t == ResourceType::FAVICON => "image",
+        t if t == ResourceType::FONT_RESOURCE => "font",
+        t if t == ResourceType::MEDIA => "media",
+        t if t == ResourceType::XHR => "xmlhttprequest",
+        t if t == ResourceType::PING => "ping",
+        t if t == ResourceType::OBJECT || t == ResourceType::PLUGIN_RESOURCE => "object",
+        _ => "other",
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientKind {
@@ -419,7 +467,9 @@ wrap_request_handler! {
             _disable_default_handling: Option<&mut ::std::os::raw::c_int>,
         ) -> Option<ResourceRequestHandler> {
             // Only installed when needed, so normal loads pay nothing.
-            (self.kind == ClientKind::Content && SEND_DNT.load(Ordering::Relaxed)).then(PrivacyHeaders::new)
+            (self.kind == ClientKind::Content
+                && (SEND_DNT.load(Ordering::Relaxed) || ADBLOCK.load(Ordering::Relaxed)))
+                .then(PrivacyHeaders::new)
         }
 
         fn on_certificate_error(
@@ -563,12 +613,31 @@ wrap_resource_request_handler! {
     impl ResourceRequestHandler {
         fn on_before_resource_load(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             request: Option<&mut Request>,
             _callback: Option<&mut Callback>,
         ) -> ReturnValue {
-            if let Some(request) = request {
+            let Some(request) = request else { return ReturnValue::CONTINUE };
+            if ADBLOCK.load(Ordering::Relaxed) {
+                let kind = adblock_type(request.resource_type());
+                if kind != "document" {
+                    let url = from_userfree(&request.url());
+                    // First party = the tab's top-level page.
+                    let source = browser
+                        .and_then(|b| b.main_frame())
+                        .map(|f| from_userfree(&f.url()))
+                        .unwrap_or_default();
+                    let blocker = BLOCKER.read().ok().and_then(|b| b.clone());
+                    if let Some(blocker) = blocker {
+                        if url.starts_with("http") && blocker.should_block(&url, &source, kind) {
+                            tracing::trace!("blocked {kind} {url}");
+                            return ReturnValue::CANCEL;
+                        }
+                    }
+                }
+            }
+            if SEND_DNT.load(Ordering::Relaxed) {
                 for (name, value) in [("DNT", "1"), ("Sec-GPC", "1")] {
                     request.set_header_by_name(
                         Some(&crate::engine::cef_str(name)),

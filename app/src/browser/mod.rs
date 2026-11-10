@@ -239,6 +239,12 @@ pub fn start() {
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
 
     handlers::SEND_DNT.store(state_dnt(), std::sync::atomic::Ordering::Relaxed);
+    if with_state(|s| s.settings.adblock_enabled).unwrap_or(false) {
+        handlers::ADBLOCK.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(dir) = with_state(|s| s.paths.filter_lists.clone()) {
+            handlers::start_blocker(dir);
+        }
+    }
     schedule_housekeeping();
     with_state(|s| {
         theme::apply_to_context(s, None);

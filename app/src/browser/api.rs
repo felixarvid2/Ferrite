@@ -393,6 +393,13 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                 s.settings.send_do_not_track,
                 std::sync::atomic::Ordering::Relaxed,
             );
+            let was_blocking = super::handlers::ADBLOCK.swap(
+                s.settings.adblock_enabled,
+                std::sync::atomic::Ordering::Relaxed,
+            );
+            if s.settings.adblock_enabled && !was_blocking {
+                super::handlers::start_blocker(s.paths.filter_lists.clone());
+            }
             if s.settings.theme != before_theme {
                 super::theme::apply_to_context(s, None);
                 if let Some(ctx) = s.private_context.clone() {
