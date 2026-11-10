@@ -42,6 +42,12 @@ pub fn make_handler() -> ContextMenuHandler {
     ContentContextMenu::new()
 }
 
+/// Links and images from a page may only open as ordinary web URLs (never
+/// ferrite://, javascript:, data: or other schemes).
+fn is_web_url(url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|u| matches!(u.scheme(), "http" | "https" | "ftp"))
+}
+
 fn short(text: &str) -> String {
     let t: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if t.chars().count() > 32 {
@@ -71,14 +77,14 @@ wrap_context_menu_handler! {
                 model.insert_item_at(index, id, Some(&cef_str(label)));
                 index += 1;
             };
-            if !link.is_empty() {
+            if is_web_url(&link) {
                 insert(OPEN_LINK_TAB, "Open link in new tab");
                 insert(OPEN_LINK_WINDOW, "Open link in new window");
                 insert(OPEN_LINK_PRIVATE, "Open link in private window");
                 insert(SAVE_LINK, "Save link as…");
                 insert(COPY_LINK, "Copy link address");
             }
-            if is_image {
+            if is_image && is_web_url(&from_userfree(&params.source_url())) {
                 insert(OPEN_IMAGE_TAB, "Open image in new tab");
                 insert(SAVE_IMAGE, "Save image as…");
                 insert(COPY_IMAGE_URL, "Copy image address");
@@ -107,12 +113,17 @@ wrap_context_menu_handler! {
             let src = from_userfree(&params.source_url());
             let selection = from_userfree(&params.selection_text());
             let (x, y) = (params.xcoord(), params.ycoord());
+            let needs_web = matches!(command_id, OPEN_LINK_TAB | OPEN_LINK_WINDOW | OPEN_LINK_PRIVATE | COPY_LINK | SAVE_LINK | OPEN_IMAGE_TAB | SAVE_IMAGE | COPY_IMAGE_URL);
+            let target = if matches!(command_id, OPEN_IMAGE_TAB | SAVE_IMAGE | COPY_IMAGE_URL) { &src } else { &link };
+            if needs_web && !is_web_url(target) {
+                return 1;
+            }
             match command_id {
                 OPEN_LINK_TAB | OPEN_IMAGE_TAB => {
                     let url = if command_id == OPEN_LINK_TAB { link } else { src };
                     later(move |s| {
                         let Some(opener) = s.tab_of_browser(browser_id) else { return };
-                        let win = s.tabs[&opener].win;
+                        let Some(win) = s.tabs.get(&opener).map(|t| t.win) else { return };
                         tabs::new_tab(s, win, &url, tabs::NewTab { background: true, opener: Some(opener), ..Default::default() });
                     });
                 }
@@ -135,7 +146,7 @@ wrap_context_menu_handler! {
                 SEARCH_SELECTION => {
                     later(move |s| {
                         let Some(opener) = s.tab_of_browser(browser_id) else { return };
-                        let win = s.tabs[&opener].win;
+                        let Some(win) = s.tabs.get(&opener).map(|t| t.win) else { return };
                         let url = s.resolve_input(&format!("?{}", selection.trim()));
                         tabs::new_tab(s, win, &url, tabs::NewTab { opener: Some(opener), ..Default::default() });
                     });

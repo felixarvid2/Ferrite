@@ -44,10 +44,10 @@ impl Downloads {
         if running.is_empty() {
             return None;
         }
-        let (r, t) = running
-            .iter()
-            .fold((0i64, 0i64), |(r, t), d| (r + d.received, t + d.total));
-        Some(((r * 100) / t.max(1)) as i32)
+        let (r, t) = running.iter().fold((0i64, 0i64), |(r, t), d| {
+            (r.saturating_add(d.received), t.saturating_add(d.total))
+        });
+        Some((r.saturating_mul(100) / t.max(1)).clamp(0, i32::MAX as i64) as i32)
     }
 
     pub fn cancel_all(&mut self) {

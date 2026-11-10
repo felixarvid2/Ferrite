@@ -209,10 +209,22 @@ pub fn start() {
         Ok(db) => db,
         Err(err) => {
             tracing::error!("cannot open profile database ({err:#}); using a temporary one");
-            Database::open_in_memory().expect("in-memory database")
+            match Database::open_in_memory() {
+                Ok(db) => db,
+                Err(err) => {
+                    tracing::error!("cannot open a temporary database either: {err:#}");
+                    return;
+                }
+            }
         }
     };
-    let private_db = Database::open_in_memory().expect("in-memory database");
+    let private_db = match Database::open_in_memory() {
+        Ok(db) => db,
+        Err(err) => {
+            tracing::error!("cannot open the private-mode database: {err:#}");
+            return;
+        }
+    };
 
     scheme::register(None);
 

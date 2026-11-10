@@ -56,10 +56,12 @@ pub fn navigation_allowed(current_url: &str, target: &str, is_main: bool) -> boo
     if !is_main {
         return false;
     }
-    let from_internal = is_internal(current_url);
-    let fresh = current_url.is_empty() || current_url == "about:blank";
+    // Only navigations the browser itself started (address bar, menus, new
+    // tabs, session restore: all go through `allow_internal`) or that come
+    // from an internal page. A page-opened `about:blank` popup is NOT
+    // trusted: it could be scripted by its opener.
     let browser_initiated = ALLOWED.with(|a| a.borrow_mut().remove(&normalize(target)));
-    browser_initiated || from_internal || fresh
+    browser_initiated || is_internal(current_url)
 }
 
 pub fn register(ctx: Option<&RequestContext>) {
@@ -297,6 +299,14 @@ mod tests {
             "ferrite://settings/",
             true
         ));
+        // A fresh (about:blank) browser is not trusted on its own.
+        assert!(!navigation_allowed(
+            "about:blank",
+            "ferrite://settings/",
+            true
+        ));
+        assert!(!navigation_allowed("", "ferrite://settings/", true));
+        allow_internal("ferrite://newtab/");
         assert!(navigation_allowed("", "ferrite://newtab/", true));
         assert!(!navigation_allowed(
             "ferrite://newtab/",

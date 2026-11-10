@@ -76,6 +76,21 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 - History, downloads, settings and new tab pages render.
 
+### Look and window frame
+
+- Redesigned toolbar: the active tab merges into the toolbar, separators between
+  inactive tabs, coloured letter icons for sites without a favicon, the address
+  bar shows the site's domain in full ink when not focused, purple tint in
+  private windows. Internal pages share a design system with a sidebar, toggle
+  switches and day-grouped history; checked in dark and light themes.
+- Frameless window by default: the tab strip is the title bar (CSS
+  `app-region: drag`, reported through CEF's drag handler and applied with
+  `Window::set_draggable_regions`). Dragging the strip moved the window under
+  openbox; minimize/maximize/close buttons are drawn by the UI.
+  Settings > Appearance > "Use system title bar" (`system_titlebar`) turns the
+  desktop's title bar back on (takes effect for new windows).
+- Not checked: frameless resizing from the window edges on GNOME/KDE, Wayland.
+
 ### Release bundle
 
 - The release bundle in `dist/` runs standalone with the embedded UI.
@@ -140,6 +155,18 @@ Network traffic went through an HTTPS-intercepting proxy.
 - macOS and Windows builds have not been attempted. The code has a `cfg(macos)`
   mapping of `Cmd` for shortcuts only. macOS needs an app bundle and helper
   processes through the cef-rs bundle tooling. Windows needs a sandbox bootstrap.
+
+## Project skills for Claude Code
+
+`/home/user/test/.claude/skills/` (repository root) holds skills written for
+this project after a survey of public skills found nothing for CEF, Xvfb or
+browser security:
+
+- `ferrite-e2e`: start/stop an isolated headless instance, drive it over CDP
+  and xdotool, screenshots, `scripts/smoke.sh` (passes).
+- `ferrite-cef`: cef-rs patterns, threading, the re-entrancy rule, panic safety
+  (cef-rs has no `catch_unwind`: a panic in a callback aborts the browser).
+- `ferrite-security`: threat model, invariants, review checklist, abuse tests.
 
 ## How to resume work
 

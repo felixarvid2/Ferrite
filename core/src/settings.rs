@@ -39,6 +39,8 @@ pub struct Settings {
     pub default_zoom_percent: u32,
     /// Unload background tabs unused for this many minutes (0 = never).
     pub tab_sleep_minutes: u32,
+    /// Use the desktop's title bar instead of Ferrite's tab strip.
+    pub system_titlebar: bool,
 }
 
 impl Default for Settings {
@@ -61,6 +63,7 @@ impl Default for Settings {
             restore_after_crash: true,
             default_zoom_percent: 100,
             tab_sleep_minutes: 60,
+            system_titlebar: false,
         }
     }
 }

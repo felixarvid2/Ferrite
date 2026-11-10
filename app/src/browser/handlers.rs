@@ -126,6 +126,9 @@ wrap_client! {
         fn find_handler(&self) -> Option<FindHandler> {
             Some(FerriteFind::new())
         }
+        fn drag_handler(&self) -> Option<DragHandler> {
+            (self.kind == ClientKind::Ui).then(UiDrag::new)
+        }
         fn permission_handler(&self) -> Option<PermissionHandler> {
             Some(permissions::make_handler(self.kind == ClientKind::Ui))
         }
@@ -647,6 +650,30 @@ wrap_resource_request_handler! {
                 }
             }
             ReturnValue::CONTINUE
+        }
+    }
+}
+
+wrap_drag_handler! {
+    struct UiDrag;
+
+    impl DragHandler {
+        fn on_draggable_regions_changed(
+            &self,
+            browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            regions: Option<&[DraggableRegion]>,
+        ) {
+            // The UI strip sits at the window's origin, so its coordinates
+            // are window coordinates.
+            let regions: Vec<DraggableRegion> = regions.map(|r| r.to_vec()).unwrap_or_default();
+            tracing::debug!("draggable regions: {}", regions.len());
+            let browser_id = id_of(&browser);
+            later(move |s| {
+                if let Some(window) = s.win_of_browser(browser_id).and_then(|w| s.windows.get(&w)).and_then(|w| w.window.clone()) {
+                    window.set_draggable_regions(Some(&regions));
+                }
+            });
         }
     }
 }

@@ -101,7 +101,10 @@ fn request(
         reply.send(false);
         return;
     };
-    let win = s.tabs[&tab].win;
+    let Some(win) = s.tabs.get(&tab).map(|t| t.win) else {
+        reply.send(false);
+        return;
+    };
     let origin = ferrite_core::omnibox::origin_of(&origin).unwrap_or(origin);
     if let Some(allow) = stored_decision(s, win, &origin, &perms) {
         reply.send(allow);

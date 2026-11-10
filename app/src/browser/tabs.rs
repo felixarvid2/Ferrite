@@ -62,7 +62,9 @@ fn empty_tab(id: TabId, win: WinId, url: &str, opts: &NewTab) -> Tab {
 
 /// Where a new tab goes in the strip.
 fn insert_index(s: &State, win: WinId, opts: &NewTab) -> usize {
-    let w = &s.windows[&win];
+    let Some(w) = s.windows.get(&win) else {
+        return 0;
+    };
     let pinned_count = w
         .tabs
         .iter()
@@ -188,7 +190,9 @@ fn adopt_popup_window(
             height: (h + 90).clamp(260, 1600),
         });
     }
-    let win = window::open_window(s, init);
+    let Some(win) = window::open_window(s, init) else {
+        return;
+    };
     adopt_into(s, win, opener, popup_tab, view, false);
 }
 
@@ -241,7 +245,9 @@ pub fn activate(s: &mut State, win: WinId, tab: TabId) {
     if let Some(t) = s.tabs.get_mut(&tab) {
         t.last_active = ferrite_core::now_ms();
     }
-    let t = &s.tabs[&tab];
+    let Some(t) = s.tabs.get(&tab) else {
+        return;
+    };
     if let Some(view) = &t.view {
         view.set_visible(1);
         content.layout();
@@ -336,7 +342,9 @@ pub fn tab_closed(s: &mut State, tab: TabId) {
         return;
     }
     if was_active {
-        let next = w.tabs[index.min(w.tabs.len() - 1)];
+        let Some(next) = w.tabs.get(index.min(w.tabs.len() - 1)).copied() else {
+            return;
+        };
         w.active = None;
         activate(s, win, next);
     }
@@ -345,12 +353,13 @@ pub fn tab_closed(s: &mut State, tab: TabId) {
 }
 
 pub fn move_tab(s: &mut State, tab: TabId, to: usize) {
-    let Some(win) = s.tabs.get(&tab).map(|t| t.win) else {
+    let Some((win, pinned)) = s.tabs.get(&tab).map(|t| (t.win, t.pinned)) else {
         return;
     };
-    let pinned = s.tabs[&tab].pinned;
-    let pinned_count = s.windows[&win]
-        .tabs
+    let Some(win_tabs) = s.windows.get(&win).map(|w| &w.tabs) else {
+        return;
+    };
+    let pinned_count = win_tabs
         .iter()
         .filter(|t| **t != tab && s.tabs.get(t).is_some_and(|t| t.pinned))
         .count();
@@ -376,8 +385,10 @@ pub fn set_pinned(s: &mut State, tab: TabId, pinned: bool) {
     t.pinned = pinned;
     let win = t.win;
     // Re-insert at the edge of the pinned group.
-    let pinned_count = s.windows[&win]
-        .tabs
+    let Some(win_tabs) = s.windows.get(&win).map(|w| &w.tabs) else {
+        return;
+    };
+    let pinned_count = win_tabs
         .iter()
         .filter(|x| **x != tab && s.tabs.get(x).is_some_and(|t| t.pinned))
         .count();
@@ -534,10 +545,11 @@ pub fn tab_slept(s: &mut State, tab: TabId) {
             w.content.remove_child_view(Some(&mut v));
         }
     }
-    let t = s.tabs.get_mut(&tab).expect("tab");
-    t.browser = None;
-    t.discarding = false;
-    t.loading = false;
+    if let Some(t) = s.tabs.get_mut(&tab) {
+        t.browser = None;
+        t.discarding = false;
+        t.loading = false;
+    }
     s.mark_dirty(win);
 }
 

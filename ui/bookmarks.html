@@ -2,26 +2,34 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Bookmarks</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
-<div class="page">
-  <h1>Bookmarks</h1>
+<div class="shell">
+<aside id="nav" data-active="bookmarks"></aside>
+<main class="page">
+  <div class="page-head"><div><h1>Bookmarks</h1><p class="lede">Click a folder to choose where new items are added. Drag to reorder.</p></div></div>
   <div class="toolbar">
-    <input type="search" id="q" placeholder="Search bookmarks">
-    <button class="btn" id="addfolder">New folder</button>
-    <button class="btn" id="addbm">Add bookmark</button>
+    <input type="search" id="q" placeholder="Search bookmarks" autocomplete="off">
+    <button class="btn" id="addfolder"></button>
+    <button class="btn primary" id="addbm"></button>
   </div>
   <div id="tree"></div>
+</main>
 </div>
 <style>
-  .folder > .row { font-weight: 600; }
-  .children { margin-left: 22px; border-left: 1px solid var(--border); }
+  .folder > .row { font-weight: 600; background: var(--bg2); }
+  .folder > .row.current { background: var(--accent-soft); }
+  .folder > .row .folder-ic { color: var(--accent); }
+  .folder > .row .count { font-weight: 500; color: var(--fg3); font-size: 12px; }
+  .children { margin-left: 28px; border-left: 1px solid var(--border); }
   .row[draggable] { cursor: grab; }
-  .row.drop { box-shadow: inset 0 2px 0 var(--accent); }
+  .row.drop { box-shadow: inset 0 2px 0 var(--accent); background: var(--accent-soft); }
+  .card .folder:not(.root) > .row { border-bottom: 1px solid var(--border); }
 </style>
 <script src="ferrite://app/bookmarks.js"></script>
 </body></html>

@@ -69,7 +69,7 @@ pub fn browser_settings(s: &State) -> BrowserSettings {
     }
 }
 
-pub fn open_window(s: &mut State, init: WindowInit) -> WinId {
+pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
     let id = next_id();
     let height = Rc::new(Cell::new(INITIAL_UI_HEIGHT));
     let mut ctx = s.context_for(init.private);
@@ -77,18 +77,23 @@ pub fn open_window(s: &mut State, init: WindowInit) -> WinId {
 
     let mut ui_client = s.ui_client.clone();
     let mut ui_delegate = UiViewDelegate::new(id, height.clone());
-    let ui_view = browser_view_create(
+    let Some(ui_view) = browser_view_create(
         Some(&mut ui_client),
         Some(&cef_str(UI_URL)),
         Some(&settings),
         None,
         ctx.as_mut(),
         Some(&mut ui_delegate),
-    )
-    .expect("create UI browser view");
+    ) else {
+        tracing::error!("could not create the UI browser view");
+        return None;
+    };
     ui_view.set_background_color(theme::window_background(&s.settings));
 
-    let content = panel_create(None).expect("create content panel");
+    let Some(content) = panel_create(None) else {
+        tracing::error!("could not create the content panel");
+        return None;
+    };
     content.set_to_fill_layout();
     content.set_background_color(theme::window_background(&s.settings));
 
@@ -146,6 +151,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> WinId {
         }),
         init.maximized,
         init.private,
+        !s.settings.system_titlebar,
     );
     let window = window_create_top_level(Some(&mut delegate));
     if let Some(w) = s.windows.get_mut(&id) {
@@ -153,7 +159,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> WinId {
     }
     s.last_window_focus = Some(id);
     s.schedule_session_save();
-    id
+    Some(id)
 }
 
 /// Begin closing a window (from our own code, e.g. its last tab closed).
@@ -290,6 +296,7 @@ wrap_window_delegate! {
         bounds: Rect,
         maximized: bool,
         private: bool,
+        frameless: bool,
     }
 
     impl ViewDelegate {
@@ -358,6 +365,12 @@ wrap_window_delegate! {
             later(|s| s.schedule_session_save());
         }
 
+        fn is_frameless(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            // The tab strip doubles as the title bar (drag regions come from
+            // the UI page's `app-region: drag` CSS).
+            self.frameless as i32
+        }
+
         fn window_runtime_style(&self) -> RuntimeStyle {
             RuntimeStyle::ALLOY
         }
@@ -403,5 +416,25 @@ wrap_browser_view_delegate! {
         fn browser_runtime_style(&self) -> RuntimeStyle {
             RuntimeStyle::ALLOY
         }
+    }
+}
+
+/// Window buttons drawn by the UI strip in frameless mode.
+pub fn window_action(s: &mut State, win: WinId, action: &str) {
+    let Some(window) = s.windows.get(&win).and_then(|w| w.window.clone()) else {
+        return;
+    };
+    match action {
+        "minimize" => window.minimize(),
+        "maximize" => {
+            if window.is_maximized() != 0 {
+                window.restore();
+            } else {
+                window.maximize();
+            }
+            s.mark_dirty(win);
+        }
+        "close" => close_window(s, win),
+        _ => {}
     }
 }

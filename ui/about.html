@@ -2,16 +2,29 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>About Ferrite</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
-<div class="page">
-  <h1><img src="ferrite://app/icon.svg" width="32" height="32" alt="">About Ferrite</h1>
+<div class="shell">
+<aside id="nav" data-active="about"></aside>
+<main class="page narrow">
+  <div class="card hero">
+    <img src="ferrite://app/icon.svg" width="72" height="72" alt="">
+    <div><h1>Ferrite</h1><p class="lede" id="ver">&nbsp;</p></div>
+  </div>
+  <h2>Build</h2>
   <div class="card" id="info"></div>
-  <p class="muted">Ferrite is built on the Chromium Embedded Framework (CEF), which contains Chromium. Chromium is open source software; see chrome://credits for its licenses. Ferrite's own code is MIT licensed.</p>
+  <p class="muted" style="margin-top:20px;line-height:1.6">Ferrite is built on the Chromium Embedded Framework (CEF), which contains Chromium. Chromium is open source software; see chrome://credits for its licenses. Ferrite's own code is MIT licensed.</p>
+</main>
 </div>
+<style>
+  .hero { display: flex; align-items: center; gap: 20px; padding: 28px; background: radial-gradient(120% 140% at 0% 0%, var(--accent-soft), transparent 60%), var(--bg2); }
+  .hero img { filter: drop-shadow(0 6px 14px rgba(70,100,230,.35)); }
+  .k { width: 150px; flex: none; }
+</style>
 <script src="ferrite://app/about.js"></script>
 </body></html>

@@ -20,6 +20,7 @@ let suggestSeq = 0;
 const ICON = "ferrite://app/icon.svg";
 const LOCK = '<svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>';
 const INFO = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor"/><path d="M8 7.5v4M8 5v.1"/></svg>';
+const ICON_SVG = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor"/><path d="M6 11V5h4.2M6 8h3.2"/></svg>';
 const WARN = '<svg viewBox="0 0 16 16"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.2v.1"/></svg>';
 
 // ---------------------------------------------------------------- height
@@ -33,11 +34,21 @@ new ResizeObserver(reportHeight).observe(document.body);
 // ---------------------------------------------------------------- render
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
-function favicon(url, fallbackUrl) {
+// Sites without a favicon get a coloured letter, stable per host.
+function letterFor(pageUrl) {
+  let host = ""; try { host = new URL(pageUrl).hostname.replace(/^www\./, ""); } catch (_) {}
+  const d = el("span", "letter", (host[0] || "•"));
+  let h = 0; for (const c of host) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  d.style.background = `hsl(${h % 360} 45% 42%)`;
+  return d;
+}
+function favicon(url, pageUrl) {
+  if (pageUrl && pageUrl.startsWith("ferrite:")) url = ICON;
+  if (!url) return letterFor(pageUrl);
   const img = document.createElement("img");
   img.alt = "";
-  img.src = url || ICON;
-  img.onerror = () => { img.onerror = null; img.src = ICON; };
+  img.src = url;
+  img.onerror = () => img.replaceWith(letterFor(pageUrl));
   return img;
 }
 
@@ -52,14 +63,15 @@ function renderTabs() {
     node.classList.toggle("active", t.id === state.active);
     node.classList.toggle("pinned", t.pinned);
     node.classList.toggle("closing", t.closing);
+    node.classList.toggle("sleeping", !!t.sleeping);
     const title = t.title || (t.url === "ferrite://newtab/" ? "New Tab" : t.url) || "New Tab";
     node.title = title;
     node.querySelector(".tab-title").textContent = title;
     const icon = node.querySelector(".tab-icon");
-    const want = t.loading ? "loading" : (t.crashed ? "crashed" : (t.favicon || ICON));
+    const want = t.loading ? "loading" : (t.crashed ? "crashed" : (t.favicon || "letter:" + t.url));
     if (icon.dataset.want !== want) {
       icon.dataset.want = want;
-      icon.replaceChildren(t.loading ? el("div", "spinner") : t.crashed ? Object.assign(el("span"), { innerHTML: WARN }) : favicon(t.favicon));
+      icon.replaceChildren(t.loading ? el("div", "spinner") : t.crashed ? Object.assign(el("span"), { innerHTML: WARN }) : favicon(t.favicon, t.url));
     }
     node.querySelector(".tab-media").hidden = !t.media;
     order.push(node);
@@ -106,15 +118,16 @@ function makeTab(id) {
 function clearDrop() { document.querySelectorAll(".drag-over-left,.drag-over-right").forEach(n => n.classList.remove("drag-over-left", "drag-over-right")); }
 
 function renderNav() {
-  const nav = state.nav || {};
+  let nav = state.nav || {};
   $("back").disabled = !nav.can_back;
   $("forward").disabled = !nav.can_forward;
   $("reload").classList.toggle("loading", !!nav.loading);
   $("reload").title = nav.loading ? "Stop (Esc)" : "Reload (Ctrl+R)";
-  if (!editing) $("address").value = nav.display_url || "";
+  if (!editing) { $("address").value = nav.display_url || ""; paintAddressView(nav.display_url || ""); }
   const sec = $("security");
+  if (!nav.display_url) nav = Object.assign({}, nav, { security: "" }); // New Tab page: no chip
   sec.className = nav.security || "";
-  sec.innerHTML = { secure: LOCK, insecure: WARN + "&nbsp;Not secure", error: WARN + "&nbsp;Certificate error", internal: "", local: INFO }[nav.security] || "";
+  sec.innerHTML = { secure: LOCK, insecure: WARN + "Not secure", error: WARN + "Not private", internal: ICON_SVG + "Ferrite", local: INFO + "File" }[nav.security] || "";
   sec.title = { secure: "Connection is secure (HTTPS)", insecure: "This connection is not encrypted", error: "The certificate of this site is not valid", local: "Local file" }[nav.security] || "";
   const zoom = $("zoom");
   zoom.hidden = !nav.zoom || nav.zoom === 100;
@@ -129,9 +142,24 @@ function renderNav() {
   $("findbar").hidden = !find.open;
   if (find.open) {
     if (document.activeElement !== $("find-input") && $("find-input").value !== find.text) $("find-input").value = find.text || "";
-    $("find-count").textContent = find.text ? (find.count ? `${find.active} of ${find.count}` : "No matches") : "";
+    $("find-count").textContent = find.text ? (find.count ? `${find.active} of ${find.count}` : "No results") : "";
+    $("find-count").classList.toggle("none", !!find.text && !find.count);
   }
   $("crashbar").hidden = !nav.crashed;
+}
+
+// Unfocused address bar: dim the scheme/path, show the host in full ink.
+function paintAddressView(url) {
+  const view = $("address-view");
+  view.replaceChildren();
+  $("address").classList.toggle("has-view", !!url);
+  if (!url) return;
+  let u; try { u = new URL(url); } catch (_) { view.textContent = url; return; }
+  if (!/^https?:$/.test(u.protocol)) { view.append(el("b", null, url)); return; }
+  const host = u.host;
+  const i = url.indexOf(host);
+  const pre = url.slice(0, i).replace(/^https:\/\//, ""), rest = url.slice(i + host.length);
+  view.append(pre, el("b", null, host), rest === "/" ? "" : rest);
 }
 
 function renderBookmarks() {
@@ -149,7 +177,7 @@ function renderBookmarks() {
       n.addEventListener("click", () => cmd("bookmarks"));
     } else {
       let fav; try { fav = new URL(b.url).origin + "/favicon.ico"; } catch (_) {}
-      n.append(favicon(fav), el("span", null, b.title || b.url));
+      n.append(favicon(fav, b.url), el("span", null, b.title || b.url));
       n.addEventListener("click", e => api("open_url", { url: b.url, background: e.ctrlKey || e.metaKey }));
       n.addEventListener("auxclick", e => { if (e.button === 1) api("open_url", { url: b.url, background: true }); });
     }
@@ -168,11 +196,14 @@ function renderPrompts() {
     const row = el("div", "prompt");
     let host = p.origin; try { host = new URL(p.origin).host; } catch (_) {}
     const what = p.permissions.map(x => names[x] || x.replace(/_/g, " ")).join(", ");
-    const text = el("div", "grow"); text.append(el("b", null, host), " wants to " + what);
+    const text = el("div", "grow what");
+    const icon = el("span"); icon.innerHTML = '<svg viewBox="0 0 16 16"><path d="M8 1.8 13 4v4c0 3-2.2 5.3-5 6.2C5.2 13.3 3 11 3 8V4z"/></svg>';
+    const words = el("span"); words.append(el("b", null, host), " wants to " + what);
+    text.append(icon, words);
     const remember = Object.assign(document.createElement("input"), { type: "checkbox", checked: true });
     const label = el("label"); label.append(remember, "Remember");
-    const allow = el("button", "btn primary", "Allow");
-    const block = el("button", "btn", "Block");
+    const allow = el("button", "pbtn primary", "Allow");
+    const block = el("button", "pbtn", "Block");
     allow.onclick = () => api("permission", { id: p.id, allow: true, remember: remember.checked });
     block.onclick = () => api("permission", { id: p.id, allow: false, remember: remember.checked });
     row.append(text, label, block, allow);
@@ -193,6 +224,10 @@ window.ferrite = {
     document.documentElement.dataset.theme = s.theme === "light" ? "light"
       : s.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
     $("private-badge").hidden = !s.private;
+    $("winctl").hidden = !s.frameless;
+    if (s.frameless) document.documentElement.dataset.frameless = ""; else delete document.documentElement.dataset.frameless;
+    $("win-max").title = s.maximized ? "Restore" : "Maximize";
+    if (s.private) document.documentElement.dataset.private = ""; else delete document.documentElement.dataset.private;
     renderTabs(); renderNav(); renderBookmarks(); renderPrompts(); renderDownloads();
     reportHeight();
   },
@@ -222,7 +257,14 @@ $("downloads").onclick = () => cmd("downloads");
 $("zoom").onclick = () => cmd("zoom_reset");
 $("menu").onclick = () => { const r = $("menu").getBoundingClientRect(); api("menu", { x: Math.round(r.right), y: Math.round(r.bottom) }); };
 $("crash-reload").onclick = () => cmd("reload");
-$("tabstrip").addEventListener("dblclick", e => { if (e.target.id === "tabstrip" || e.target.id === "tabs") cmd("new_tab"); });
+// Double-click on empty strip: maximize like a title bar (frameless) or new tab.
+$("tabstrip").addEventListener("dblclick", e => {
+  if (!["tabstrip", "tabs", "drag-space"].includes(e.target.id)) return;
+  if (state && state.frameless) api("window", { action: "maximize" }); else cmd("new_tab");
+});
+$("win-min").onclick = () => api("window", { action: "minimize" });
+$("win-max").onclick = () => api("window", { action: "maximize" });
+$("win-close").onclick = () => api("window", { action: "close" });
 
 // ---------------------------------------------------------------- omnibox
 const address = $("address");
@@ -276,6 +318,7 @@ function fetchSuggest(deleting) {
 }
 function paintSuggest() {
   const box = $("suggest");
+  box.style.setProperty("--sg-indent", Math.max(12, Math.round(address.getBoundingClientRect().left - 8 - 28)) + "px");
   box.replaceChildren();
   suggestions.forEach((s, i) => {
     const row = el("div", "sg" + (i === sel ? " sel" : ""));
@@ -283,7 +326,7 @@ function paintSuggest() {
     if (s.kind === "search") k.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor"/><path d="m10.5 10.5 3 3"/></svg>';
     else if (s.kind === "bookmark") k.innerHTML = '<svg viewBox="0 0 16 16"><path d="m8 2 1.8 3.8 4.2.5-3.1 2.9.8 4.1L8 11.3l-3.7 2 .8-4.1L2 6.3l4.2-.5z"/></svg>';
     else k.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor"/><path d="M8 4.5V8l2.5 1.5"/></svg>';
-    row.append(k, el("span", "t", s.title || s.url));
+    row.append(k, highlight(el("span", "t"), s.title || s.url, typed));
     if (s.kind !== "search") row.append(el("span", "u", s.url));
     row.addEventListener("mousedown", e => {
       e.preventDefault();
@@ -295,6 +338,12 @@ function paintSuggest() {
   });
   box.hidden = !suggestions.length;
   reportHeight();
+}
+function highlight(node, text, q) {
+  const i = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (i < 0) { node.textContent = text; return node; }
+  node.append(text.slice(0, i), el("mark", null, text.slice(i, i + q.length)), text.slice(i + q.length));
+  return node;
 }
 function hideSuggest() { suggestions = []; sel = -1; $("suggest").hidden = true; reportHeight(); }
 

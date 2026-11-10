@@ -2,21 +2,35 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Downloads</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
-<div class="page">
-  <h1>Downloads</h1>
-  <div class="toolbar"><input type="search" id="q" placeholder="Search downloads"><button class="btn" id="clear">Clear finished</button></div>
-  <div id="list" class="card"></div>
+<div class="shell">
+<aside id="nav" data-active="downloads"></aside>
+<main class="page">
+  <div class="page-head"><div><h1>Downloads</h1><p class="lede">Files you have downloaded</p></div></div>
+  <div class="toolbar"><input type="search" id="q" placeholder="Search downloads" autocomplete="off"><button class="btn" id="clear">Clear finished</button></div>
+  <div id="list"></div>
+</main>
 </div>
 <style>
-  .bar { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: 6px; }
-  .bar > div { height: 100%; background: var(--accent); }
-  .warn { color: var(--warn); font-size: 12px; }
+  .dl { align-items: flex-start; padding: 14px 16px; gap: 14px; }
+  .ftype { width: 42px; height: 42px; border-radius: 11px; flex: none; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .ftype svg { width: 21px; height: 21px; }
+  .ftype.image { background: var(--ok-soft); color: var(--ok); } .ftype.archive { background: var(--warn-soft); color: var(--warn); }
+  .ftype.media { background: var(--danger-soft); color: var(--danger); }
+  .dl .head { display: flex; align-items: center; gap: 8px; }
+  .dl .head .title { font-weight: 600; min-width: 0; }
+  .dl .btns { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+  .bar { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .bar > div { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s linear; }
+  .warnbox { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn); font-size: 12px; }
+  .warnbox svg { margin-top: 1px; }
+  .dl.gone .title { text-decoration: line-through; color: var(--fg3); }
 </style>
 <script src="ferrite://app/downloads.js"></script>
 </body></html>

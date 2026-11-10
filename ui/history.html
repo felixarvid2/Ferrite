@@ -2,20 +2,24 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>History</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
-<div class="page">
-  <h1>History</h1>
+<div class="shell">
+<aside id="nav" data-active="history"></aside>
+<main class="page">
+  <div class="page-head"><div><h1>History</h1><p class="lede" id="count">Pages you have visited</p></div></div>
   <div class="toolbar">
-    <input type="search" id="q" placeholder="Search history">
-    <select id="range"><option value="hour">Last hour</option><option value="day">Last 24 hours</option><option value="week">Last 7 days</option><option value="month">Last 4 weeks</option><option value="all">All time</option></select>
-    <button class="btn danger" id="clear">Clear</button>
+    <input type="search" id="q" placeholder="Search history" autocomplete="off">
+    <select id="range" title="Range to clear"><option value="hour">Last hour</option><option value="day">Last 24 hours</option><option value="week">Last 7 days</option><option value="month">Last 4 weeks</option><option value="all">All time</option></select>
+    <button class="btn danger" id="clear">Clear browsing history</button>
   </div>
   <div id="list"></div>
+</main>
 </div>
 <script src="ferrite://app/history.js"></script>
 </body></html>

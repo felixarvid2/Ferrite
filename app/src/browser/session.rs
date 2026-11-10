@@ -120,8 +120,9 @@ pub fn restore_or_open(s: &mut State, launch: &LaunchOptions) {
                 }),
                 maximized: snap.maximized,
             };
-            let id = window::open_window(s, init);
-            first_window.get_or_insert(id);
+            if let Some(id) = window::open_window(s, init) {
+                first_window.get_or_insert(id);
+            }
         }
     }
 

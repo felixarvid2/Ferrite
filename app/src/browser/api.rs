@@ -42,6 +42,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
                 "pinned": t.pinned,
                 "crashed": t.crashed,
                 "closing": t.closing,
+                "sleeping": t.browser.is_none() && t.view.is_none(),
                 "media": t.media_video || t.media_audio,
             })
         })
@@ -97,11 +98,14 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "prompts": prompts,
         "downloads": { "active": s.downloads.active_count(), "progress": s.downloads.progress() },
         "closed_tabs": w.closed_tabs.len(),
+        "frameless": !s.settings.system_titlebar,
+        "maximized": w.window.as_ref().is_some_and(|w| w.is_maximized() != 0),
     })
 }
 
 /// Commands only the UI strip may send.
 const UI_ONLY: &[&str] = &[
+    "window",
     "set_height",
     "menu",
     "tab_menu",
@@ -110,6 +114,15 @@ const UI_ONLY: &[&str] = &[
     "pin_tab",
     "permission",
 ];
+
+/// Reject tab ids that belong to another window (or to no tab at all).
+fn tab_in_window(s: &State, win: WinId, tab: u32) -> Result<u32> {
+    if s.tabs.get(&tab).map(|t| t.win) == Some(win) {
+        Ok(tab)
+    } else {
+        bail!("tab not in this window")
+    }
+}
 
 pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Result<Value> {
     let caller = *s
@@ -137,6 +150,10 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             window_snapshot(s, win)
         }
         "state" => window_snapshot(s, win),
+        "window" => {
+            window::window_action(s, win, arg_str(&args, "action")?);
+            Value::Null
+        }
         "set_height" => {
             window::set_ui_height(s, win, arg_i64(&args, "height")? as i32);
             Value::Null
@@ -144,6 +161,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         "navigate" => {
             let input = arg_str(&args, "input")?.to_string();
             let tab = tab_arg(&args).or(active).context("no tab")?;
+            let tab = tab_in_window(s, win, tab)?;
             if arg_bool(&args, "new_tab") {
                 let url = s.resolve_input(&input);
                 tabs::new_tab(s, win, &url, tabs::NewTab::foreground());
@@ -187,7 +205,8 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             json!(tabs::new_tab(s, win, &url, opts))
         }
         "activate_tab" => {
-            tabs::activate(s, win, arg_i64(&args, "tab")? as u32);
+            let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
+            tabs::activate(s, win, tab);
             Value::Null
         }
         "close_tab" => {
@@ -196,24 +215,24 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                 BrowserRef::Ui(_) => active,
             });
             if let Some(tab) = tab {
+                let tab = tab_in_window(s, win, tab)?;
                 tabs::close_tab(s, tab);
             }
             Value::Null
         }
         "move_tab" => {
-            tabs::move_tab(
-                s,
-                arg_i64(&args, "tab")? as u32,
-                arg_i64(&args, "index")?.max(0) as usize,
-            );
+            let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
+            tabs::move_tab(s, tab, arg_i64(&args, "index")?.max(0) as usize);
             Value::Null
         }
         "pin_tab" => {
-            tabs::set_pinned(s, arg_i64(&args, "tab")? as u32, arg_bool(&args, "pinned"));
+            let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
+            tabs::set_pinned(s, tab, arg_bool(&args, "pinned"));
             Value::Null
         }
         "duplicate_tab" => {
             if let Some(tab) = tab_arg(&args).or(active) {
+                let tab = tab_in_window(s, win, tab)?;
                 tabs::duplicate(s, tab);
             }
             Value::Null
@@ -235,10 +254,11 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             Value::Null
         }
         "tab_menu" => {
+            let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
             menu::show_tab_menu(
                 s,
                 win,
-                arg_i64(&args, "tab")? as u32,
+                tab,
                 arg_i64(&args, "x")? as i32,
                 arg_i64(&args, "y")? as i32,
             );

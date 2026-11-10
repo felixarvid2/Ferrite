@@ -2,52 +2,66 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
-<div class="page">
-  <h1>Settings</h1>
+<div class="shell">
+<aside id="nav" data-active="settings"></aside>
+<main class="page narrow">
+  <div class="page-head"><div><h1>Settings</h1><p class="lede">Changes are saved automatically.</p></div></div>
   <h2>Appearance</h2>
   <div class="card">
-    <div class="row"><div class="grow">Theme</div><select data-key="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
-    <div class="row"><div class="grow">Show bookmarks bar</div><input type="checkbox" data-key="show_bookmarks_bar"></div>
+    <div class="row"><div class="grow"><div>Theme</div><div class="desc">Dark, light, or follow your system.</div></div><select data-key="theme"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
+    <div class="row"><div class="grow"><div>Show bookmarks bar</div><div class="desc">Keep your favourite sites one click away under the address bar.</div></div><input type="checkbox" class="switch" data-key="show_bookmarks_bar"></div>
+    <div class="row"><div class="grow"><div>Use system title bar</div><div class="desc">Show the desktop's title bar instead of placing tabs in the window frame. Applies to new windows.</div></div><input type="checkbox" class="switch" data-key="system_titlebar"></div>
   </div>
   <h2>On startup</h2>
   <div class="card">
-    <div class="row"><div class="grow">When Ferrite starts</div><select data-key="startup"><option value="restore_session">Continue where you left off</option><option value="new_tab">Open the New Tab page</option><option value="homepage">Open the home page</option></select></div>
-    <div class="row"><div class="grow">Home page</div><input data-key="homepage" style="width:340px"></div>
-    <div class="row"><div class="grow">Restore tabs after a crash</div><input type="checkbox" data-key="restore_after_crash"></div>
+    <div class="row"><div class="grow"><div>When Ferrite starts</div></div><select data-key="startup"><option value="restore_session">Continue where you left off</option><option value="new_tab">Open the New Tab page</option><option value="homepage">Open the home page</option></select></div>
+    <div class="row"><div class="grow"><div>Home page</div><div class="desc">Used by the home button and when startup is set to the home page.</div></div><input data-key="homepage" style="width:280px" spellcheck="false"></div>
+    <div class="row"><div class="grow"><div>Restore tabs after a crash</div><div class="desc">Offer to bring back your tabs if Ferrite closed unexpectedly.</div></div><input type="checkbox" class="switch" data-key="restore_after_crash"></div>
   </div>
   <h2>Search</h2>
   <div class="card">
-    <div class="row"><div class="grow">Search engine used in the address bar</div><select data-key="search_engine" id="engines"></select></div>
-    <div class="row"><div class="grow">Custom search URL <span class="muted">(use %s for the query)</span></div><input data-key="custom_search_url" style="width:340px" placeholder="https://example.com/search?q=%s"></div>
+    <div class="row"><div class="grow"><div>Search engine</div><div class="desc">Used when you type a search in the address bar.</div></div><select data-key="search_engine" id="engines"></select></div>
+    <div class="row"><div class="grow"><div>Custom search URL</div><div class="desc">Use %s where the query goes. Only used when the engine is Custom.</div></div><input data-key="custom_search_url" style="width:280px" placeholder="https://example.com/search?q=%s" spellcheck="false"></div>
   </div>
   <h2>Downloads</h2>
   <div class="card">
-    <div class="row"><div class="grow">Save files to</div><input data-key="download_dir" style="width:340px"></div>
-    <div class="row"><div class="grow">Ask where to save each file</div><input type="checkbox" data-key="ask_download_location"></div>
+    <div class="row"><div class="grow"><div>Save files to</div></div><input data-key="download_dir" style="width:280px" spellcheck="false"></div>
+    <div class="row"><div class="grow"><div>Ask where to save each file</div><div class="desc">Show a file chooser for every download.</div></div><input type="checkbox" class="switch" data-key="ask_download_location"></div>
   </div>
-  <h2>Privacy</h2>
+  <h2>Privacy and security</h2>
   <div class="card">
-    <div class="row"><div class="grow">Ask sites not to track or sell your data <span class="muted">(sends Do Not Track and Global Privacy Control)</span></div><input type="checkbox" data-key="send_do_not_track"></div>
-    <div class="row"><div class="grow">Block ads and trackers <span class="muted">(EasyList + EasyPrivacy, updated every few days)</span></div><input type="checkbox" data-key="adblock_enabled"></div>
+    <div class="row"><div class="grow"><div>Send Do Not Track</div><div class="desc">Asks sites not to track or sell your data (sends Do Not Track and Global Privacy Control).</div></div><input type="checkbox" class="switch" data-key="send_do_not_track"></div>
+    <div class="row"><div class="grow"><div>Block ads and trackers</div><div class="desc">Uses EasyList and EasyPrivacy, updated every few days.</div></div><input type="checkbox" class="switch" data-key="adblock_enabled"></div>
   </div>
   <h2>Performance</h2>
   <div class="card">
-    <div class="row"><div class="grow">Put unused background tabs to sleep after <span class="muted">(frees memory; the tab reloads when you open it)</span></div><select data-key="tab_sleep_minutes" data-number><option value="0">Never</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="240">4 hours</option></select></div>
+    <div class="row"><div class="grow"><div>Sleep unused background tabs</div><div class="desc">Frees memory. A sleeping tab reloads when you open it.</div></div><select data-key="tab_sleep_minutes" data-number><option value="0">Never</option><option value="15">After 15 minutes</option><option value="30">After 30 minutes</option><option value="60">After 1 hour</option><option value="240">After 4 hours</option></select></div>
   </div>
   <h2>Clear browsing data</h2>
+  <p class="section-desc">Choose what to remove from this profile.</p>
   <div class="card">
-    <div class="row"><label><input type="checkbox" id="c-history" checked> History</label><label><input type="checkbox" id="c-cookies"> Cookies</label><label><input type="checkbox" id="c-cache" checked> Cached files</label><label><input type="checkbox" id="c-site"> Site storage <span class="muted">(next start)</span></label><label><input type="checkbox" id="c-downloads"> Download list</label><div class="grow"></div><button class="btn danger" id="clearbtn">Clear</button></div>
+    <div class="row" style="flex-wrap:wrap;gap:8px 22px;padding:14px 16px">
+      <label><input type="checkbox" id="c-history" checked>History</label>
+      <label><input type="checkbox" id="c-cookies">Cookies</label>
+      <label><input type="checkbox" id="c-cache" checked>Cached files</label>
+      <label><input type="checkbox" id="c-site">Site storage <span class="muted">(next start)</span></label>
+      <label><input type="checkbox" id="c-downloads">Download list</label>
+      <div class="grow"></div><button class="btn danger" id="clearbtn">Clear data</button>
+    </div>
   </div>
   <h2>Site permissions</h2>
+  <p class="section-desc">Sites you have allowed or blocked from using the camera, location, notifications and more.</p>
   <div class="card" id="perms"></div>
   <h2>About</h2>
-  <div class="card"><div class="row"><div class="grow" id="about"></div><a href="ferrite://about/">Details</a></div></div>
+  <div class="card"><div class="row"><img src="ferrite://app/icon.svg" width="28" height="28" alt=""><div class="grow" id="about"></div><a href="ferrite://about/">Details</a></div></div>
+</main>
 </div>
 <script src="ferrite://app/settings.js"></script>
 </body></html>

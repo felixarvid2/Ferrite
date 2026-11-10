@@ -17,18 +17,18 @@ async function loadPerms() {
   const perms = await api("permissions_list");
   const box = document.getElementById("perms");
   box.replaceChildren();
-  if (!perms.length) { box.append(el("div", { class: "empty", text: "No site has been given or refused permissions yet" })); return; }
-  for (const p of perms) box.append(el("div", { class: "row" },
+  if (!perms.length) { box.append(el("div", { class: "empty compact" }, el("b", { text: "No site permissions" }), el("div", { text: "No site has been given or refused permissions yet." }))); return; }
+  for (const p of perms) box.append(el("div", { class: "row hoverable" },
     el("div", { class: "grow" }, el("div", { class: "title", text: p.origin }), el("div", { class: "sub", text: p.permission.replace(/_/g, " ") })),
-    el("span", { class: p.decision === "allow" ? "" : "muted", text: p.decision === "allow" ? "Allowed" : "Blocked" }),
-    el("button", { class: "icon-btn", title: "Reset", text: "✕", onclick: () => api("permission_remove", { origin: p.origin, permission: p.permission }).then(loadPerms) })));
+    el("span", { class: "chip " + (p.decision === "allow" ? "ok" : "bad"), text: p.decision === "allow" ? "Allowed" : "Blocked" }),
+    el("button", { class: "icon-btn danger", title: "Reset", "aria-label": "Reset", onclick: () => api("permission_remove", { origin: p.origin, permission: p.permission }).then(loadPerms) }, icon("close"))));
 }
 for (const input of document.querySelectorAll("[data-key]")) {
   input.addEventListener("change", async () => {
     const value = input.type === "checkbox" ? input.checked : ("number" in input.dataset ? Number(input.value) : input.value);
     try { settings = await api("settings_set", { patch: { [input.dataset.key]: value } }); }
     catch (e) { alert(e.message); load(); }
-    if (input.dataset.key === "theme") location.reload();
+    if (input.dataset.key === "theme") { try { localStorage.setItem("ferrite-theme", value); } catch (_) {} location.reload(); }
   });
 }
 document.getElementById("clearbtn").onclick = async () => {

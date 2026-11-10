@@ -2,6 +2,7 @@
 <html data-theme="dark">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New Tab</title>
 <link rel="icon" href="ferrite://app/icon.svg">
 <link rel="stylesheet" href="ferrite://app/common.css">
@@ -9,22 +10,46 @@
 </head>
 <body>
 <style>
-  .nt { max-width: 760px; margin: 12vh auto 0; padding: 0 24px; text-align: center; }
-  .nt h1 { font-size: 30px; font-weight: 600; margin: 0 0 22px; letter-spacing: -.01em; display: flex; gap: 12px; justify-content: center; align-items: center; }
-  .nt h1 img { width: 38px; height: 38px; }
-  .nt form input { width: 100%; padding: 12px 18px; font-size: 15px; border-radius: 24px; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; margin-top: 30px; }
-  .tile { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; text-decoration: none; color: var(--fg); background: var(--bg2); border: 1px solid var(--border); }
-  .tile:hover { background: var(--bg3); }
-  .tile img { width: 28px; height: 28px; }
-  .tile span { font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .private { margin: 24px auto 0; max-width: 520px; color: var(--fg2); line-height: 1.6; }
+  body { min-height: 100vh; background:
+    radial-gradient(900px 500px at 15% -10%, var(--accent-soft), transparent 70%),
+    radial-gradient(700px 420px at 95% 5%, rgba(160,120,255,.08), transparent 70%), var(--bg); background-attachment: fixed; }
+  :root[data-private] { --accent: #b48cff; --accent-fg: #1a0c33; --accent-soft: rgba(180,140,255,.16); --accent-ring: rgba(180,140,255,.5); --bg: #14111b; --bg2: #1d1928; --bg3: #2a2438; --border: #302a40; --border-strong: #463e5e; }
+  :root[data-private][data-theme="light"] { --accent: #6d3fd1; --accent-fg: #fff; --accent-soft: rgba(109,63,209,.1); --accent-ring: rgba(109,63,209,.4); --bg: #f4f0fb; --bg2: #fff; --bg3: #ebe5f7; --border: #e0d8f0; --border-strong: #cdc2e6; }
+  .nt { max-width: 720px; margin: 0 auto; padding: 14vh 24px 48px; text-align: center; }
+  .clock { font-size: 76px; font-weight: 300; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .greet { margin: 10px 0 34px; font-size: 17px; color: var(--fg2); }
+  .badge { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 5px 12px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 12px; }
+  .search { position: relative; }
+  .search svg { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--fg3); pointer-events: none; }
+  .search input { width: 100%; padding: 16px 22px 16px 52px; font-size: 16px; border-radius: 99px; background: var(--bg2); box-shadow: var(--shadow-2); border-color: var(--border); }
+  .search input:focus { box-shadow: var(--shadow-2), 0 0 0 4px var(--accent-soft); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px; margin-top: 44px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 8px 14px; border-radius: var(--radius-lg); text-decoration: none; color: var(--fg); border: 1px solid transparent;
+    transition: background var(--dur), transform .2s var(--ease), border-color var(--dur), box-shadow var(--dur); }
+  .tile:hover { background: var(--bg2); border-color: var(--border); box-shadow: var(--shadow-1); transform: translateY(-2px); text-decoration: none; }
+  .tile .ic { width: 48px; height: 48px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--border); display: grid; place-items: center; box-shadow: var(--shadow-1); }
+  :root[data-theme="dark"] .tile .ic { background: #eceef3; border-color: transparent; }
+  .tile .ic img.fav { width: 26px; height: 26px; border-radius: 6px; }
+  .tile .ic .avatar { width: 48px; height: 48px; border-radius: 14px; font-size: 20px; margin: -1px; }
+  .tile span.name { font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg2); }
+  .private { margin: 28px auto 0; max-width: 540px; padding: 18px 20px; text-align: left; color: var(--fg2); line-height: 1.6; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .private h2 { margin: 0 0 6px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); display: flex; gap: 8px; align-items: center; }
+  .private h2 svg { color: var(--accent); }
+  .nt { animation: rise .5s var(--ease) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  @media (max-width: 560px) { .clock { font-size: 56px; } }
 </style>
 <div class="nt">
-  <h1><img src="ferrite://app/icon.svg" alt="">Ferrite</h1>
-  <form id="f"><input id="q" placeholder="Search the web or type an address" autocomplete="off" spellcheck="false"></form>
+  <div class="badge" id="badge" hidden></div>
+  <div class="clock" id="clock">&nbsp;</div>
+  <div class="greet" id="greet"></div>
+  <form id="f" class="search"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" placeholder="Search the web or type an address" autocomplete="off" spellcheck="false" autofocus></form>
   <div class="tiles" id="tiles"></div>
-  <div class="private" id="priv" hidden>You are browsing privately. Pages you visit, cookies, site data and downloads list entries are kept in memory and discarded when you close all private windows. Downloaded files stay on disk. Your network provider and the sites you visit can still see your activity.</div>
+  <div class="private" id="priv" hidden>
+    <h2 id="privh"></h2>
+    Pages you visit, cookies, site data and download list entries are kept in memory and discarded when you close all private windows. Downloaded files stay on disk. Your network provider and the sites you visit can still see your activity.
+  </div>
 </div>
 <script src="ferrite://app/newtab.js"></script>
 </body></html>
