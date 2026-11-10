@@ -9,6 +9,7 @@
 <script src="ferrite://app/common.js"></script>
 </head>
 <body>
+<canvas id="field" aria-hidden="true"></canvas>
 <style>
   body { min-height: 100vh; background: var(--bg); }
   :root[data-private] { --accent: #b48cff; --accent-fg: #1a0c33; --accent-soft: rgba(180,140,255,.16); --accent-ring: rgba(180,140,255,.55); --bg: #14111b; --bg2: #1d1928; --bg3: #2a2438; --border: #302a40; --border-strong: #463e5e; --card-border: rgba(255,255,255,.07); }
@@ -44,6 +45,11 @@
   .nt { animation: rise .5s var(--ease) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
   @media (max-width: 560px) { .clock { font-size: 56px; } }
+  /* Ferrite's one signature: iron filings along a magnetic field, drawn
+     quietly behind the page and faded toward the edges. */
+  #field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;
+    mask-image: radial-gradient(ellipse 70% 65% at 50% 38%, #000 30%, transparent 78%); }
+  .nt { position: relative; z-index: 1; }
 </style>
 <div class="nt">
   <div class="badge" id="badge" hidden></div>
