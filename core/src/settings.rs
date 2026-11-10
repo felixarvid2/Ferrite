@@ -41,6 +41,8 @@ pub struct Settings {
     pub tab_sleep_minutes: u32,
     /// Use the desktop's title bar instead of Ferrite's tab strip.
     pub system_titlebar: bool,
+    /// Show tabs in a sidebar on the left instead of above the toolbar.
+    pub vertical_tabs: bool,
 }
 
 impl Default for Settings {
@@ -64,6 +66,7 @@ impl Default for Settings {
             default_zoom_percent: 100,
             tab_sleep_minutes: 60,
             system_titlebar: false,
+            vertical_tabs: false,
         }
     }
 }

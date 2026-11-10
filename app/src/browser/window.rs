@@ -18,6 +18,10 @@ use std::rc::Rc;
 const RESIZE_BORDER: i32 = 4;
 
 pub const UI_URL: &str = "ferrite://app/chrome.html";
+/// The same UI page in sidebar (vertical tabs) mode.
+pub const SIDE_URL: &str = "ferrite://app/chrome.html#side";
+/// Width of the vertical-tabs sidebar.
+const SIDE_WIDTH: i32 = 240;
 /// Height of the UI strip before the page reports its real height.
 const INITIAL_UI_HEIGHT: i32 = 78;
 
@@ -79,7 +83,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
     let settings = browser_settings(s);
 
     let mut ui_client = s.ui_client.clone();
-    let mut ui_delegate = UiViewDelegate::new(id, height.clone());
+    let mut ui_delegate = UiViewDelegate::new(id, height.clone(), false);
     let Some(ui_view) = browser_view_create(
         Some(&mut ui_client),
         Some(&cef_str(UI_URL)),
@@ -100,6 +104,39 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
     content.set_to_fill_layout();
     content.set_background_color(theme::window_background(&s.settings));
 
+    // Vertical tabs: [sidebar | content] in a horizontal box below the toolbar.
+    let mut side_view = None;
+    let mut body = content.clone();
+    if s.settings.vertical_tabs {
+        let mut side_client = s.ui_client.clone();
+        let mut side_delegate = UiViewDelegate::new(id, Rc::new(Cell::new(0)), true);
+        let side = browser_view_create(
+            Some(&mut side_client),
+            Some(&cef_str(SIDE_URL)),
+            Some(&settings),
+            None,
+            ctx.as_mut(),
+            Some(&mut side_delegate),
+        );
+        if let (Some(side), Some(row)) = (side, panel_create(None)) {
+            side.set_background_color(theme::frame_color(&s.settings, init.private));
+            let layout = row.set_to_box_layout(Some(&BoxLayoutSettings {
+                horizontal: 1,
+                cross_axis_alignment: AxisAlignment::STRETCH,
+                ..Default::default()
+            }));
+            let mut sv = View::from(&side);
+            let mut cv = View::from(&content);
+            row.add_child_view(Some(&mut sv));
+            row.add_child_view(Some(&mut cv));
+            if let Some(layout) = layout {
+                layout.set_flex_for_view(Some(&mut cv), 1);
+            }
+            side_view = Some(side);
+            body = row;
+        }
+    }
+
     s.windows.insert(
         id,
         Win {
@@ -109,6 +146,8 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
             ui_browser: None,
             ui_height: height,
             ui_ready: false,
+            side_view,
+            side_browser: None,
             content: content.clone(),
             tabs: Vec::new(),
             active: None,
@@ -145,7 +184,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
     let mut delegate = MainWindowDelegate::new(
         id,
         ui_view,
-        content,
+        body,
         init.bounds.unwrap_or(Rect {
             x: 0,
             y: 0,
@@ -276,6 +315,9 @@ pub fn set_html_fullscreen(s: &mut State, win: WinId, fullscreen: bool) {
     };
     w.html_fullscreen = fullscreen;
     w.ui_view.set_visible(!fullscreen as i32);
+    if let Some(side) = &w.side_view {
+        side.set_visible(!fullscreen as i32);
+    }
     if let Some(window) = &w.window {
         if window.is_fullscreen() != fullscreen as i32 {
             window.set_fullscreen(fullscreen as i32);
@@ -414,13 +456,20 @@ wrap_browser_view_delegate! {
     pub struct UiViewDelegate {
         win_id: WinId,
         height: Rc<Cell<i32>>,
+        side: bool,
     }
 
     impl ViewDelegate {
         fn preferred_size(&self, _view: Option<&mut View>) -> Size {
+            if self.side {
+                return Size { width: SIDE_WIDTH, height: 100 };
+            }
             Size { width: 800, height: self.height.get() }
         }
         fn minimum_size(&self, _view: Option<&mut View>) -> Size {
+            if self.side {
+                return Size { width: SIDE_WIDTH, height: 50 };
+            }
             Size { width: 200, height: self.height.get() }
         }
     }
@@ -428,10 +477,14 @@ wrap_browser_view_delegate! {
     impl BrowserViewDelegate {
         fn on_browser_created(&self, _view: Option<&mut BrowserView>, browser: Option<&mut Browser>) {
             let Some(browser) = browser.cloned() else { return };
-            let win = self.win_id;
+            let (win, side) = (self.win_id, self.side);
             later(move |s| {
                 s.browsers.insert(browser.identifier(), BrowserRef::Ui(win));
                 if let Some(w) = s.windows.get_mut(&win) {
+                    if side {
+                        w.side_browser = Some(browser);
+                        return;
+                    }
                     w.ui_browser = Some(browser);
                 }
             });

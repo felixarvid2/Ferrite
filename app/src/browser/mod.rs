@@ -104,6 +104,9 @@ pub struct Win {
     pub ui_browser: Option<Browser>,
     pub ui_height: Rc<Cell<i32>>,
     pub ui_ready: bool,
+    /// Vertical-tabs sidebar (a second UI view) when enabled.
+    pub side_view: Option<BrowserView>,
+    pub side_browser: Option<Browser>,
     pub content: Panel,
     pub tabs: Vec<TabId>,
     pub active: Option<TabId>,
@@ -405,6 +408,14 @@ impl State {
         // JSON is a valid JavaScript expression; method names are ours.
         let code = format!("window.ferrite && window.ferrite.{method}({arg});");
         frame.execute_java_script(Some(&cef_str(&code)), Some(&cef_str("")), 0);
+        if let Some(side) = self
+            .windows
+            .get(&win)
+            .and_then(|w| w.side_browser.as_ref())
+            .and_then(|b| b.main_frame())
+        {
+            side.execute_java_script(Some(&cef_str(&code)), Some(&cef_str("")), 0);
+        }
     }
 
     pub fn schedule_session_save(&mut self) {

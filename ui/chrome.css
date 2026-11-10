@@ -165,3 +165,29 @@ body::after { content: ""; height: 1px; background: var(--line); flex: none; }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { *, *::after, *::before { animation-duration: 0s !important; transition-duration: 0s !important; } }
 [hidden] { display: none !important; }
+
+/* ---- vertical tabs ------------------------------------------------ */
+/* Top strip when tabs live in the sidebar: just drag space + buttons. */
+:root[data-vtabs] #tabs, :root[data-vtabs] #newtab { display: none; }
+:root[data-vtabs] #tabstrip { height: 36px; }
+/* The sidebar page itself (chrome.html#side). */
+:root[data-side], :root[data-side] body { height: 100%; }
+:root[data-side] body { background: var(--frame); }
+:root[data-side] body::after,
+:root[data-side] #toolbar, :root[data-side] #bookmarks, :root[data-side] #findbar, :root[data-side] #prompts,
+:root[data-side] #crashbar, :root[data-side] #suggest, :root[data-side] #toast, :root[data-side] #winctl,
+:root[data-side] #drag-space, :root[data-side] #private-badge { display: none !important; }
+:root[data-side] #tabstrip { flex-direction: column; align-items: stretch; height: 100vh; padding: 8px 8px 8px 8px; gap: 4px;
+  box-shadow: inset -1px 0 0 var(--line); }
+:root[data-side] #tabs { flex-direction: column; height: auto; flex: 0 1 auto; gap: 2px; overflow-y: auto; }
+:root[data-side] .tab, :root[data-side] .tab.pinned { width: auto; flex: none; height: 34px; align-self: stretch;
+  border-radius: 8px; padding: 0 6px 0 12px; justify-content: flex-start; }
+:root[data-side] .tab::before, :root[data-side] .tab.active::after { display: none; }
+:root[data-side] .tab.pinned .tab-title { display: block; }
+:root[data-side] .tab:hover:not(.active) { height: 34px; border-radius: 8px; background: var(--hover); }
+:root[data-side] .tab.active { background: var(--bar); box-shadow: inset 2px 0 0 var(--accent), 0 1px 0 rgba(0,0,0,.15); }
+:root[data-side] .tab.drag-over-left { box-shadow: inset 0 2px 0 var(--accent); }
+:root[data-side] .tab.drag-over-right { box-shadow: inset 0 -2px 0 var(--accent); }
+:root[data-side] #newtab { width: auto; height: 34px; border-radius: 8px; justify-content: flex-start; padding-left: 12px; gap: 10px; margin: 2px 0 0; color: var(--ink-3); }
+:root[data-side] #newtab::after { content: "New tab"; font-size: 12.5px; }
+:root[data-side] #newtab:hover { background: var(--hover); color: var(--ink); }

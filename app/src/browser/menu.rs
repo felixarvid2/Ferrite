@@ -91,7 +91,14 @@ const TAB_ITEMS: &[(i32, &str)] = &[
     (107, "Reopen closed tab"),
 ];
 
-pub fn show_tab_menu(s: &super::State, win: WinId, tab: super::TabId, x: i32, y: i32) {
+pub fn show_tab_menu(
+    s: &super::State,
+    win: WinId,
+    tab: super::TabId,
+    x: i32,
+    y: i32,
+    from_side: bool,
+) {
     let Some(w) = s.windows.get(&win) else { return };
     let Some(window) = w.window.clone() else {
         return;
@@ -115,7 +122,10 @@ pub fn show_tab_menu(s: &super::State, win: WinId, tab: super::TabId, x: i32, y:
     }
     model.set_enabled(107, (!w.closed_tabs.is_empty()) as i32);
     let mut point = Point { x, y };
-    w.ui_view.convert_point_to_screen(Some(&mut point));
+    match (from_side, &w.side_view) {
+        (true, Some(side)) => side.convert_point_to_screen(Some(&mut point)),
+        _ => w.ui_view.convert_point_to_screen(Some(&mut point)),
+    };
     window.show_menu(Some(&mut model), Some(&point), MenuAnchorPosition::TOPLEFT);
 }
 

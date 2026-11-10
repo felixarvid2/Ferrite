@@ -99,6 +99,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "downloads": { "active": s.downloads.active_count(), "progress": s.downloads.progress() },
         "closed_tabs": w.closed_tabs.len(),
         "frameless": !s.settings.system_titlebar,
+        "vertical_tabs": w.side_view.is_some(),
         "maximized": w.window.as_ref().is_some_and(|w| w.is_maximized() != 0),
     })
 }
@@ -133,6 +134,11 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         .win_of_browser(browser_id)
         .ok_or_else(|| anyhow!("caller has no window"))?;
     let is_ui = matches!(caller, BrowserRef::Ui(_));
+    let is_side = s
+        .windows
+        .get(&win)
+        .and_then(|w| w.side_browser.as_ref())
+        .is_some_and(|b| b.identifier() == browser_id);
     if UI_ONLY.contains(&command) && !is_ui {
         bail!("'{command}' is only available to the browser UI");
     }
@@ -154,6 +160,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             window::window_action(s, win, arg_str(&args, "action")?);
             Value::Null
         }
+        "set_height" if is_side => Value::Null,
         "set_height" => {
             window::set_ui_height(s, win, arg_i64(&args, "height")? as i32);
             Value::Null
@@ -261,6 +268,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                 tab,
                 arg_i64(&args, "x")? as i32,
                 arg_i64(&args, "y")? as i32,
+                is_side,
             );
             Value::Null
         }

@@ -670,6 +670,11 @@ wrap_drag_handler! {
             tracing::debug!("draggable regions: {}", regions.len());
             let browser_id = id_of(&browser);
             later(move |s| {
+                // Only the top strip defines the window's drag regions.
+                let from_side = s.windows.values().any(|w| w.side_browser.as_ref().is_some_and(|b| b.identifier() == browser_id));
+                if from_side {
+                    return;
+                }
                 if let Some(window) = s.win_of_browser(browser_id).and_then(|w| s.windows.get(&w)).and_then(|w| w.window.clone()) {
                     window.set_draggable_regions(Some(&regions));
                 }

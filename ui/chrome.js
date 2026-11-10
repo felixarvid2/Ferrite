@@ -9,6 +9,9 @@ async function api(cmd, args) {
   return data;
 }
 const cmd = name => api("command", { name });
+// The same page also runs as the vertical-tabs sidebar (chrome.html#side).
+const SIDE = location.hash === "#side";
+if (SIDE) document.documentElement.dataset.side = "";
 
 let state = null;
 let editing = false;        // user is typing in the address bar
@@ -26,6 +29,7 @@ const WARN = '<svg viewBox="0 0 16 16"><path d="M8 2.5 14 13H2z"/><path d="M8 6.
 // ---------------------------------------------------------------- height
 let lastHeight = 0;
 function reportHeight() {
+  if (SIDE) return;
   const h = Math.ceil(document.body.getBoundingClientRect().height);
   if (h !== lastHeight && h > 0) { lastHeight = h; api("set_height", { height: h }).catch(() => {}); }
 }
@@ -102,13 +106,13 @@ function makeTab(id) {
   n.addEventListener("dragover", e => {
     if (dragId == null || dragId === id) return;
     e.preventDefault();
-    const r = n.getBoundingClientRect(); const left = e.clientX < r.left + r.width / 2;
+    const r = n.getBoundingClientRect(); const left = SIDE ? e.clientY < r.top + r.height / 2 : e.clientX < r.left + r.width / 2;
     clearDrop(); n.classList.add(left ? "drag-over-left" : "drag-over-right");
   });
   n.addEventListener("drop", e => {
     e.preventDefault();
     if (dragId == null || dragId === id) return;
-    const r = n.getBoundingClientRect(); const left = e.clientX < r.left + r.width / 2;
+    const r = n.getBoundingClientRect(); const left = SIDE ? e.clientY < r.top + r.height / 2 : e.clientX < r.left + r.width / 2;
     const ids = state.tabs.map(t => t.id).filter(t => t !== dragId);
     let index = ids.indexOf(id) + (left ? 0 : 1);
     api("move_tab", { tab: dragId, index });
@@ -226,22 +230,26 @@ window.ferrite = {
       : s.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
     $("private-badge").hidden = !s.private;
     $("winctl").hidden = !s.frameless;
-    if (s.frameless) document.documentElement.dataset.frameless = ""; else delete document.documentElement.dataset.frameless;
+    if (s.frameless && !SIDE) document.documentElement.dataset.frameless = ""; else delete document.documentElement.dataset.frameless;
+    if (s.vertical_tabs && !SIDE) document.documentElement.dataset.vtabs = ""; else delete document.documentElement.dataset.vtabs;
     $("win-max").title = s.maximized ? "Restore" : "Maximize";
     if (s.private) document.documentElement.dataset.private = ""; else delete document.documentElement.dataset.private;
     renderTabs(); renderNav(); renderBookmarks(); renderPrompts(); renderDownloads();
     reportHeight();
   },
   focusOmnibox() {
+    if (SIDE) return;
     const a = $("address");
     a.focus(); a.select();
   },
   focusFind() {
+    if (SIDE) return;
     $("findbar").hidden = false;
     const f = $("find-input"); f.focus(); f.select();
     reportHeight();
   },
   toast(msg) {
+    if (SIDE) return;
     const t = $("toast"); t.textContent = msg; t.hidden = false;
     clearTimeout(t._h); t._h = setTimeout(() => t.hidden = true, 2200);
   },
