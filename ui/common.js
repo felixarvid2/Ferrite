@@ -127,8 +127,9 @@ function drawHeaderField(cv) {
   g.clearRect(0, 0, w, h);
   const light = document.documentElement.dataset.theme === "light";
   const rgb = light ? "65,87,230" : "124,140,255";
-  const cy = 64, span = Math.min(w * 0.34, 340);
-  const poles = [{ x: w / 2 - span, y: cy, q: 1 }, { x: w / 2 + span, y: cy, q: -1 }];
+  // Sits to the right of the title, never behind it.
+  const cy = 64, cx = w * 0.7, span = Math.min(w * 0.2, 200);
+  const poles = [{ x: cx - span, y: cy, q: 1 }, { x: cx + span, y: cy, q: -1 }];
   const field = (x, y) => {
     let fx = 0, fy = 0;
     for (const p of poles) {
@@ -149,14 +150,14 @@ function drawHeaderField(cv) {
     }
   };
   g.setLineDash([3, 7]); g.lineCap = "round"; g.lineWidth = 1.1;
-  g.strokeStyle = `rgba(${rgb},${light ? 0.2 : 0.26})`;
+  g.strokeStyle = `rgba(${rgb},${light ? 0.12 : 0.15})`;
   for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
     const y = cy + side * (10 + Math.pow(i / 5, 1.5) * 150);
-    g.beginPath(); trace(w / 2, y, 1); trace(w / 2, y, -1); g.stroke();
+    g.beginPath(); trace(cx, y, 1); trace(cx, y, -1); g.stroke();
   }
   for (const p of poles) {
     const r = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 48);
-    r.addColorStop(0, `rgba(${rgb},${light ? 0.14 : 0.2})`); r.addColorStop(1, `rgba(${rgb},0)`);
+    r.addColorStop(0, `rgba(${rgb},${light ? 0.08 : 0.12})`); r.addColorStop(1, `rgba(${rgb},0)`);
     g.fillStyle = r; g.beginPath(); g.arc(p.x, p.y, 48, 0, Math.PI * 2); g.fill();
   }
 }
