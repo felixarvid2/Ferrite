@@ -37,6 +37,8 @@ pub struct Settings {
     pub send_do_not_track: bool,
     pub restore_after_crash: bool,
     pub default_zoom_percent: u32,
+    /// Unload background tabs unused for this many minutes (0 = never).
+    pub tab_sleep_minutes: u32,
 }
 
 impl Default for Settings {
@@ -58,6 +60,7 @@ impl Default for Settings {
             send_do_not_track: false,
             restore_after_crash: true,
             default_zoom_percent: 100,
+            tab_sleep_minutes: 60,
         }
     }
 }

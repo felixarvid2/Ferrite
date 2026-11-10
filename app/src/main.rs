@@ -59,6 +59,36 @@ Environment: FERRITE_DATA_DIR (profile base directory), RUST_LOG (log filter),
 FERRITE_UI_DIR (serve the UI files from this directory instead of the
 copies built into the binary; for UI development).";
 
+/// "Clear site storage" (settings page) is applied here, before Chromium
+/// opens the profile: it removes per-site storage (local/session storage,
+/// IndexedDB, service workers, cache storage, file systems).
+fn clear_site_data_if_requested(paths: &ProfilePaths) {
+    let flag = paths.root.join("clear-site-data");
+    if !flag.exists() {
+        return;
+    }
+    let profile = paths.cef_cache.join("Default");
+    for dir in [
+        "Local Storage",
+        "Session Storage",
+        "IndexedDB",
+        "Service Worker",
+        "File System",
+        "WebStorage",
+        "databases",
+        "shared_proto_db",
+    ] {
+        let path = profile.join(dir);
+        if path.exists() {
+            if let Err(err) = std::fs::remove_dir_all(&path) {
+                tracing::warn!("could not remove {}: {err}", path.display());
+            }
+        }
+    }
+    let _ = std::fs::remove_file(flag);
+    tracing::info!("cleared site storage");
+}
+
 fn is_root() -> bool {
     // SAFETY: geteuid has no preconditions.
     unsafe { libc::geteuid() == 0 }
@@ -117,6 +147,7 @@ fn main() {
         eprintln!("ferrite: cannot create profile directory: {err:#}");
         std::process::exit(2);
     }
+    clear_site_data_if_requested(&paths);
     let settings = Settings::load(&paths.settings);
     let _ = engine::app::BROWSER_SWITCHES.set(browser::chromium_switches(&settings));
 

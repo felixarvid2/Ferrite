@@ -13,13 +13,11 @@ pub struct Live {
     pub private: bool,
     pub file_name: String,
     pub path: String,
-    pub url: String,
     pub received: i64,
     pub total: i64,
     pub speed: i64,
     pub percent: i32,
     pub state: DownloadState,
-    pub dangerous: bool,
     pub callback: Option<DownloadItemCallback>,
 }
 
@@ -95,7 +93,7 @@ fn before_download(
         .unwrap_or_else(|| "download".into());
     let record = DownloadRecord {
         id: 0,
-        url: url.clone(),
+        url,
         path: path_str.clone(),
         file_name: file_name.clone(),
         mime_type: String::new(),
@@ -107,7 +105,6 @@ fn before_download(
     };
     let db = if private { &s.private_db } else { &s.db };
     let db_id = db.insert_download(&record).unwrap_or(-1);
-    let dangerous = is_dangerous(&file_name);
     s.downloads.live.insert(
         id,
         Live {
@@ -115,13 +112,11 @@ fn before_download(
             private,
             file_name,
             path: path_str.clone(),
-            url,
             received: 0,
             total: 0,
             speed: 0,
             percent: 0,
             state: DownloadState::InProgress,
-            dangerous,
             callback: None,
         },
     );

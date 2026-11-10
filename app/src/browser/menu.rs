@@ -113,7 +113,7 @@ pub fn show_tab_menu(s: &super::State, win: WinId, tab: super::TabId, x: i32, y:
             model.add_item(*id, Some(&cef_str(label)));
         }
     }
-    model.set_enabled(107, (w.closed_tabs.len() > 0) as i32);
+    model.set_enabled(107, (!w.closed_tabs.is_empty()) as i32);
     let mut point = Point { x, y };
     w.ui_view.convert_point_to_screen(Some(&mut point));
     window.show_menu(Some(&mut model), Some(&point), MenuAnchorPosition::TOPLEFT);

@@ -120,7 +120,7 @@ function renderNav() {
   zoom.hidden = !nav.zoom || nav.zoom === 100;
   zoom.textContent = (nav.zoom || 100) + "%";
   $("star").classList.toggle("on", !!nav.bookmarked);
-  $("star").hidden = state.private || !nav.url || nav.url === "ferrite://newtab/";
+  $("star").hidden = state.private || !nav.url || nav.url.startsWith("ferrite:");
   const p = $("progress");
   p.classList.toggle("on", !!nav.loading);
   p.style.width = nav.loading ? Math.max(8, Math.round((nav.progress || 0) * 100)) + "%" : "100%";

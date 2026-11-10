@@ -6,6 +6,10 @@ use super::{commands, downloads, later, permissions, scheme, tabs, window, Brows
 use crate::engine::{from_userfree, opt_str};
 use cef::*;
 use ferrite_core::commands::{is_escape, match_shortcut};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Send `DNT: 1` and `Sec-GPC: 1` with every request (privacy setting).
+pub static SEND_DNT: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientKind {
@@ -96,6 +100,7 @@ wrap_display_handler! {
                     if t.url != url {
                         t.favicon = None;
                         t.cert_error = false;
+                        t.secure = None;
                     }
                     t.url = url;
                 }
@@ -199,7 +204,7 @@ wrap_life_span_handler! {
             _target_frame_name: Option<&CefString>,
             target_disposition: WindowOpenDisposition,
             _user_gesture: ::std::os::raw::c_int,
-            _popup_features: Option<&PopupFeatures>,
+            popup_features: Option<&PopupFeatures>,
             _window_info: Option<&mut WindowInfo>,
             _client: Option<&mut Option<Client>>,
             _settings: Option<&mut BrowserSettings>,
@@ -211,6 +216,10 @@ wrap_life_span_handler! {
                 return 1;
             }
             tabs::PENDING_POPUP_DISPOSITION.with(|p| p.set(Some(target_disposition)));
+            let size = popup_features
+                .filter(|f| f.width_set != 0 && f.height_set != 0)
+                .map(|f| (f.width, f.height));
+            tabs::PENDING_POPUP_SIZE.with(|p| p.set(size));
             0
         }
 
@@ -234,7 +243,11 @@ wrap_life_span_handler! {
             let browser_id = id_of(&browser);
             later(move |s| {
                 if let Some(BrowserRef::Tab(tab)) = s.browsers.remove(&browser_id) {
-                    tabs::tab_closed(s, tab);
+                    if s.tabs.get(&tab).is_some_and(|t| t.discarding) {
+                        tabs::tab_slept(s, tab);
+                    } else {
+                        tabs::tab_closed(s, tab);
+                    }
                 }
                 s.browser_closed();
             });
@@ -293,6 +306,16 @@ wrap_load_handler! {
                     if let Err(err) = s.db.record_visit(&url, &title, ferrite_core::now_ms()) {
                         tracing::warn!("recording history failed: {err:#}");
                     }
+                }
+                let secure = s
+                    .tabs
+                    .get(&tab)
+                    .and_then(|t| t.host())
+                    .and_then(|h| h.visible_navigation_entry())
+                    .and_then(|e| e.sslstatus())
+                    .map(|ssl| ssl.is_secure_connection() != 0);
+                if let Some(t) = s.tabs.get_mut(&tab) {
+                    t.secure = if t.url.starts_with("https:") { secure } else { None };
                 }
                 if let Some(zoom) = s.tabs.get(&tab).and_then(|t| t.host()).map(|h| h.zoom_level()) {
                     if let Some(t) = s.tabs.get_mut(&tab) {
@@ -383,6 +406,20 @@ wrap_request_handler! {
                 tabs::new_tab(s, win, &url, tabs::NewTab { background, opener: Some(opener), ..Default::default() });
             });
             1
+        }
+
+        fn resource_request_handler(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _request: Option<&mut Request>,
+            _is_navigation: ::std::os::raw::c_int,
+            _is_download: ::std::os::raw::c_int,
+            _request_initiator: Option<&CefString>,
+            _disable_default_handling: Option<&mut ::std::os::raw::c_int>,
+        ) -> Option<ResourceRequestHandler> {
+            // Only installed when needed, so normal loads pay nothing.
+            (self.kind == ClientKind::Content && SEND_DNT.load(Ordering::Relaxed)).then(PrivacyHeaders::new)
         }
 
         fn on_certificate_error(
@@ -516,6 +553,31 @@ wrap_find_handler! {
                 }
                 tab_changed(s, tab);
             });
+        }
+    }
+}
+
+wrap_resource_request_handler! {
+    struct PrivacyHeaders;
+
+    impl ResourceRequestHandler {
+        fn on_before_resource_load(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            _callback: Option<&mut Callback>,
+        ) -> ReturnValue {
+            if let Some(request) = request {
+                for (name, value) in [("DNT", "1"), ("Sec-GPC", "1")] {
+                    request.set_header_by_name(
+                        Some(&crate::engine::cef_str(name)),
+                        Some(&crate::engine::cef_str(value)),
+                        1,
+                    );
+                }
+            }
+            ReturnValue::CONTINUE
         }
     }
 }

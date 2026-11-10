@@ -22,18 +22,14 @@ impl NewTab {
     pub fn foreground() -> Self {
         Self::default()
     }
-    pub fn background() -> Self {
-        Self {
-            background: true,
-            ..Self::default()
-        }
-    }
 }
 
 thread_local! {
     /// Set by `on_before_popup`, read by the popup view callbacks that follow
     /// on the same stack (CEF calls them in that order on the UI thread).
     pub static PENDING_POPUP_DISPOSITION: Cell<Option<WindowOpenDisposition>> = const { Cell::new(None) };
+    /// Requested popup size (width, height) from `window.open` features.
+    pub static PENDING_POPUP_SIZE: Cell<Option<(i32, i32)>> = const { Cell::new(None) };
     static PENDING_POPUP_TAB: Cell<Option<TabId>> = const { Cell::new(None) };
 }
 
@@ -58,6 +54,9 @@ fn empty_tab(id: TabId, win: WinId, url: &str, opts: &NewTab) -> Tab {
         media_video: false,
         media_audio: false,
         cert_error: false,
+        last_active: ferrite_core::now_ms(),
+        discarding: false,
+        secure: None,
     }
 }
 
@@ -163,6 +162,44 @@ fn adopt_popup(
     let Some(win) = s.tabs.get(&opener).map(|t| t.win) else {
         return;
     };
+    adopt_into(s, win, opener, popup_tab, view, background);
+}
+
+/// A real popup (`window.open` with features, e.g. a login window) gets its
+/// own Ferrite window, so the user can see which site it shows.
+fn adopt_popup_window(
+    s: &mut State,
+    opener: TabId,
+    popup_tab: TabId,
+    view: BrowserView,
+    size: Option<(i32, i32)>,
+) {
+    let private = s.tabs.get(&opener).is_some_and(|t| s.is_private(t.win));
+    let mut init = window::WindowInit {
+        private,
+        ..window::WindowInit::normal(vec![])
+    };
+    init.tabs.clear();
+    if let Some((w, h)) = size {
+        init.bounds = Some(Rect {
+            x: 0,
+            y: 0,
+            width: w.clamp(320, 2000),
+            height: (h + 90).clamp(260, 1600),
+        });
+    }
+    let win = window::open_window(s, init);
+    adopt_into(s, win, opener, popup_tab, view, false);
+}
+
+fn adopt_into(
+    s: &mut State,
+    win: WinId,
+    opener: TabId,
+    popup_tab: TabId,
+    view: BrowserView,
+    background: bool,
+) {
     let opts = NewTab {
         background,
         opener: Some(opener),
@@ -188,6 +225,9 @@ pub fn activate(s: &mut State, win: WinId, tab: TabId) {
     }
     let previous = w.active;
     if let Some(prev) = previous.filter(|p| *p != tab) {
+        if let Some(t) = s.tabs.get_mut(&prev) {
+            t.last_active = ferrite_core::now_ms();
+        }
         if let Some(view) = s.tabs.get(&prev).and_then(|t| t.view.clone()) {
             view.set_visible(0);
         }
@@ -198,6 +238,9 @@ pub fn activate(s: &mut State, win: WinId, tab: TabId) {
     };
     w.active = Some(tab);
     let content = w.content.clone();
+    if let Some(t) = s.tabs.get_mut(&tab) {
+        t.last_active = ferrite_core::now_ms();
+    }
     let t = &s.tabs[&tab];
     if let Some(view) = &t.view {
         view.set_visible(1);
@@ -255,7 +298,8 @@ pub fn detach_view(s: &mut State, tab: TabId) {
         return;
     };
     let Some(view) = t.view.take() else { return };
-    t.closing = true;
+    // A sleeping tab stays in the strip (see `tab_slept`).
+    t.closing = !t.discarding;
     if let Some(w) = s.windows.get(&t.win) {
         let mut v = View::from(&view);
         w.content.remove_child_view(Some(&mut v));
@@ -438,6 +482,65 @@ pub fn browser_created(s: &mut State, tab: TabId, browser: Browser) {
     s.mark_dirty(win);
 }
 
+/// Tab sleeping: unload background tabs that have not been used for a while
+/// (they reload when selected). Skips pinned tabs, tabs using the camera or
+/// microphone and tabs that are loading. Runs once a minute.
+pub fn sleep_idle_tabs(s: &mut State) {
+    let minutes = s.settings.tab_sleep_minutes;
+    if minutes == 0 {
+        return;
+    }
+    let cutoff = ferrite_core::now_ms() - i64::from(minutes) * 60_000;
+    let active: std::collections::HashSet<TabId> =
+        s.windows.values().filter_map(|w| w.active).collect();
+    let victims: Vec<TabId> = s
+        .tabs
+        .values()
+        .filter(|t| {
+            !active.contains(&t.id)
+                && t.browser.is_some()
+                && !t.pinned
+                && !t.closing
+                && !t.discarding
+                && !t.loading
+                && !t.media_audio
+                && !t.media_video
+                && t.last_active < cutoff
+                && !t.url.starts_with("ferrite:")
+        })
+        .map(|t| t.id)
+        .collect();
+    for tab in victims {
+        let Some(t) = s.tabs.get_mut(&tab) else {
+            continue;
+        };
+        tracing::info!("putting idle tab to sleep: {}", t.url);
+        t.discarding = true;
+        if let Some(host) = t.host() {
+            host.close_browser(1);
+        }
+    }
+}
+
+/// A sleeping tab's browser is gone: keep the tab as a lazy one.
+pub fn tab_slept(s: &mut State, tab: TabId) {
+    let Some(t) = s.tabs.get_mut(&tab) else {
+        return;
+    };
+    let win = t.win;
+    if let Some(view) = t.view.take() {
+        if let Some(w) = s.windows.get(&win) {
+            let mut v = View::from(&view);
+            w.content.remove_child_view(Some(&mut v));
+        }
+    }
+    let t = s.tabs.get_mut(&tab).expect("tab");
+    t.browser = None;
+    t.discarding = false;
+    t.loading = false;
+    s.mark_dirty(win);
+}
+
 wrap_browser_view_delegate! {
     pub struct TabViewDelegate {
         tab_id: TabId,
@@ -477,15 +580,15 @@ wrap_browser_view_delegate! {
                 // CEF creates a default top-level window for DevTools.
                 return 0;
             }
-            let background = match disposition {
-                Some(d) if d == WindowOpenDisposition::NEW_FOREGROUND_TAB => false,
-                Some(d) if d == WindowOpenDisposition::NEW_BACKGROUND_TAB => true,
-                // Real popups (window.open with features, e.g. OAuth/login
-                // windows): let CEF give them their own window.
-                _ => return 0,
-            };
+            let size = PENDING_POPUP_SIZE.with(|p| p.take());
             let opener = self.tab_id;
-            later(move |s| adopt_popup(s, opener, popup_tab, popup, background));
+            match disposition {
+                Some(d) if d == WindowOpenDisposition::NEW_FOREGROUND_TAB || d == WindowOpenDisposition::NEW_BACKGROUND_TAB => {
+                    let background = d == WindowOpenDisposition::NEW_BACKGROUND_TAB;
+                    later(move |s| adopt_popup(s, opener, popup_tab, popup, background));
+                }
+                _ => later(move |s| adopt_popup_window(s, opener, popup_tab, popup, size)),
+            }
             1
         }
 

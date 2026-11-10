@@ -7,7 +7,7 @@ async function load() {
   sel.replaceChildren(...r.engines.map(e => el("option", { value: e.id, text: e.name })), el("option", { value: "custom", text: "Custom…" }));
   for (const input of document.querySelectorAll("[data-key]")) {
     const v = settings[input.dataset.key];
-    if (input.type === "checkbox") input.checked = !!v; else input.value = v;
+    if (input.type === "checkbox") input.checked = !!v; else input.value = String(v);
   }
   loadPerms();
   const a = await api("about");
@@ -25,7 +25,7 @@ async function loadPerms() {
 }
 for (const input of document.querySelectorAll("[data-key]")) {
   input.addEventListener("change", async () => {
-    const value = input.type === "checkbox" ? input.checked : input.value;
+    const value = input.type === "checkbox" ? input.checked : ("number" in input.dataset ? Number(input.value) : input.value);
     try { settings = await api("settings_set", { patch: { [input.dataset.key]: value } }); }
     catch (e) { alert(e.message); load(); }
     if (input.dataset.key === "theme") location.reload();

@@ -4,6 +4,8 @@ fn main() {
     // look for shared libraries in the executable's own directory.
     #[cfg(target_os = "linux")]
     println!("cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN");
+    // Unit-test binaries live in target/<profile>/deps.
+    println!("cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN/..");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../ui");
 }

@@ -32,10 +32,19 @@ pub fn allow_internal(url: &str) {
     }
 }
 
+/// Chromium treats ferrite:// as a standard scheme, so `ferrite://history`
+/// arrives as `ferrite://history/`; the `url` crate does not add the slash
+/// for non-special schemes, so do it here.
 fn normalize(url: &str) -> String {
-    url::Url::parse(url)
-        .map(|u| u.to_string())
-        .unwrap_or_else(|_| url.to_string())
+    match url::Url::parse(url) {
+        Ok(mut u) => {
+            if u.path().is_empty() {
+                u.set_path("/");
+            }
+            u.to_string()
+        }
+        Err(_) => url.to_string(),
+    }
 }
 
 /// Called from `on_before_browse`: may `frame` (currently showing

@@ -50,12 +50,19 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
     let nav = active.map(|t| {
         let bookmarked = !w.private
             && !t.url.is_empty()
-            && s.db.find_bookmarks_by_url(&t.url).map(|b| !b.is_empty()).unwrap_or(false);
+            && s.db
+                .find_bookmarks_by_url(&t.url)
+                .map(|b| !b.is_empty())
+                .unwrap_or(false);
         json!({
             "tab": t.id,
             "url": t.url,
             "display_url": display_url(&t.url),
-            "security": if t.cert_error { json!("error") } else { serde_json::to_value(security_level(&t.url)).unwrap_or_default() },
+            "security": if t.cert_error || t.secure == Some(false) {
+                json!("error")
+            } else {
+                serde_json::to_value(security_level(&t.url)).unwrap_or_default()
+            },
             "loading": t.loading,
             "progress": t.progress,
             "can_back": t.can_back,
@@ -382,6 +389,10 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             s.settings
                 .apply_patch(args.get("patch").unwrap_or(&Value::Null))?;
             s.save_settings();
+            super::handlers::SEND_DNT.store(
+                s.settings.send_do_not_track,
+                std::sync::atomic::Ordering::Relaxed,
+            );
             if s.settings.theme != before_theme {
                 super::theme::apply_to_context(s, None);
                 if let Some(ctx) = s.private_context.clone() {

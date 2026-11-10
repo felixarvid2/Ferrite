@@ -71,6 +71,12 @@ pub struct Tab {
     pub media_video: bool,
     pub media_audio: bool,
     pub cert_error: bool,
+    /// Last time the tab was shown (ms); used for tab sleeping.
+    pub last_active: i64,
+    /// The browser is being closed to free memory; the tab stays.
+    pub discarding: bool,
+    /// Result of the TLS check for the current page (https only).
+    pub secure: Option<bool>,
 }
 
 impl Tab {
@@ -232,9 +238,23 @@ pub fn start() {
     };
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
 
+    handlers::SEND_DNT.store(state_dnt(), std::sync::atomic::Ordering::Relaxed);
+    schedule_housekeeping();
     with_state(|s| {
         theme::apply_to_context(s, None);
         session::restore_or_open(s, &launch);
+    });
+}
+
+fn state_dnt() -> bool {
+    with_state(|s| s.settings.send_do_not_track).unwrap_or(false)
+}
+
+/// Periodic work: tab sleeping.
+fn schedule_housekeeping() {
+    engine::post_local_delayed(60_000, || {
+        with_state(tabs::sleep_idle_tabs);
+        schedule_housekeeping();
     });
 }
 

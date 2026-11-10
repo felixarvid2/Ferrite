@@ -114,6 +114,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> WinId {
     );
 
     let count = init.tabs.len();
+    // (Popup windows start empty and adopt the popup's view right after.)
     let active = init.active.min(count.saturating_sub(1));
     let mut active_id = None;
     for (i, t) in init.tabs.into_iter().enumerate() {
