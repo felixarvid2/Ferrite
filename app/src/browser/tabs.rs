@@ -125,9 +125,14 @@ pub fn create_view(s: &mut State, tab: TabId) {
     let mut client = s.content_client.clone();
     let mut delegate = TabViewDelegate::new(tab);
     scheme::allow_internal(&url);
+    let deferred = url.starts_with("http")
+        && super::handlers::ADBLOCK.load(std::sync::atomic::Ordering::Relaxed);
+    if deferred {
+        DEFERRED_LOAD.with(|d| d.borrow_mut().insert(tab, url.clone()));
+    }
     let Some(view) = browser_view_create(
         Some(&mut client),
-        Some(&cef_str(&url)),
+        Some(&cef_str(if deferred { "about:blank" } else { &url })),
         Some(&settings),
         None,
         ctx.as_mut(),
@@ -495,6 +500,42 @@ pub fn browser_created(s: &mut State, tab: TabId, browser: Browser) {
     s.mark_dirty(win);
 }
 
+thread_local! {
+    /// Web tabs start on about:blank and load their URL once that page has
+    /// loaded: content-blocking scripts registered through DevTools only
+    /// reach the first real page if the DevTools session exists before its
+    /// navigation starts (see inject.rs). Tab id -> URL until the browser
+    /// exists, then browser id -> URL until about:blank has loaded.
+    static DEFERRED_LOAD: std::cell::RefCell<std::collections::HashMap<TabId, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static DEFERRED_START: std::cell::RefCell<std::collections::HashMap<i32, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The browser of `tab` exists (UI thread, inside CEF's callback).
+fn deferred_created(tab: TabId, browser: &mut Browser) {
+    if let Some(url) = DEFERRED_LOAD.with(|d| d.borrow_mut().remove(&tab)) {
+        super::inject::attach(browser);
+        DEFERRED_START.with(|d| d.borrow_mut().insert(browser.identifier(), url));
+    }
+}
+
+/// Is `browser_id` still on the about:blank placeholder of a deferred load?
+pub fn is_deferred(browser_id: i32) -> bool {
+    DEFERRED_START.with(|d| d.borrow().contains_key(&browser_id))
+}
+
+/// The main frame of a content browser finished loading: start a deferred
+/// first navigation.
+pub fn deferred_start(browser: &mut Browser) {
+    let Some(url) = DEFERRED_START.with(|d| d.borrow_mut().remove(&browser.identifier())) else {
+        return;
+    };
+    if let Some(frame) = browser.main_frame() {
+        frame.load_url(Some(&cef_str(&url)));
+    }
+}
+
 /// Tab sleeping: unload background tabs that have not been used for a while
 /// (they reload when selected). Skips pinned tabs, tabs using the camera or
 /// microphone and tabs that are loading. Runs once a minute.
@@ -564,8 +605,9 @@ wrap_browser_view_delegate! {
 
     impl BrowserViewDelegate {
         fn on_browser_created(&self, _view: Option<&mut BrowserView>, browser: Option<&mut Browser>) {
-            let Some(browser) = browser.cloned() else { return };
+            let Some(mut browser) = browser.cloned() else { return };
             let tab = self.tab_id;
+            deferred_created(tab, &mut browser);
             later(move |s| browser_created(s, tab, browser));
         }
 

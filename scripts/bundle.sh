@@ -20,6 +20,7 @@ for f in libEGL.so libGLESv2.so snapshot_blob.bin; do
 done
 cp -r "$CEF_PATH/locales" "$OUT/"
 cp "$CEF_PATH/CREDITS.html" "$OUT/CHROMIUM-CREDITS.html"
+mkdir -p "$OUT/adblock" && cp resources/adblock/ubo-scriptlets.json resources/adblock/LICENSE-uBlock-Origin.txt resources/adblock/README.md "$OUT/adblock/"
 # Debug symbols make libcef.so ~1.4 GB; stripped it is ~265 MB.
 strip --strip-debug "$OUT/ferrite" "$OUT/libcef.so" 2>/dev/null || true
 cat <<MSG

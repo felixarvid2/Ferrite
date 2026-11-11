@@ -428,6 +428,15 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             if s.settings.adblock_enabled && !was_blocking {
                 super::handlers::start_blocker(s.paths.filter_lists.clone());
             }
+            if !s.settings.adblock_enabled && was_blocking {
+                let browsers: std::collections::HashMap<i32, Browser> = s
+                    .tabs
+                    .values()
+                    .filter_map(|t| t.browser.clone())
+                    .map(|b| (b.identifier(), b))
+                    .collect();
+                super::inject::clear_all(|id| browsers.get(&id).cloned());
+            }
             if s.settings.theme != before_theme {
                 super::theme::apply_to_context(s, None);
                 if let Some(ctx) = s.private_context.clone() {

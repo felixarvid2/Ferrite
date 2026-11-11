@@ -15,6 +15,20 @@ pub static ADBLOCK: AtomicBool = AtomicBool::new(false);
 pub static BLOCKER: std::sync::RwLock<Option<std::sync::Arc<ferrite_core::blocker::Blocker>>> =
     std::sync::RwLock::new(None);
 
+/// uBlock Origin's scriptlets (GPL-3.0 data file, see resources/adblock/):
+/// next to the executable in a bundle, else in the source tree (dev builds).
+pub fn scriptlets_path() -> Option<std::path::PathBuf> {
+    let name = "adblock/ubo-scriptlets.json";
+    let bundled = std::env::current_exe().ok()?.parent()?.join(name);
+    if bundled.is_file() {
+        return Some(bundled);
+    }
+    let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../resources")
+        .join(name);
+    dev.is_file().then_some(dev)
+}
+
 /// Load cached filter lists, then refresh stale ones, off the UI thread.
 pub fn start_blocker(lists_dir: std::path::PathBuf) {
     std::thread::spawn(move || {
@@ -25,12 +39,13 @@ pub fn start_blocker(lists_dir: std::path::PathBuf) {
                 *slot = Some(std::sync::Arc::new(b));
             }
         };
-        install(Blocker::load_dir(&lists_dir));
+        let resources = scriptlets_path();
+        install(Blocker::load_dir(&lists_dir, resources.as_deref()));
         match update_lists(&lists_dir) {
             Ok(0) => {}
             Ok(n) => {
                 tracing::info!("updated {n} filter lists");
-                install(Blocker::load_dir(&lists_dir));
+                install(Blocker::load_dir(&lists_dir, resources.as_deref()));
             }
             Err(err) => tracing::warn!("filter list update failed: {err:#}"),
         }
@@ -146,6 +161,12 @@ wrap_display_handler! {
                 return;
             }
             let url = opt_str(url);
+            if url == "about:blank" && tabs::is_deferred(id_of(&browser)) {
+                return; // placeholder before the real first page, keep the tab's URL
+            }
+            if let Some(mut b) = browser.as_deref().cloned() {
+                super::inject::committed(&mut b, &url);
+            }
             with_tab(id_of(&browser), move |s, tab| {
                 if let Some(t) = s.tabs.get_mut(&tab) {
                     if t.url != url {
@@ -165,6 +186,9 @@ wrap_display_handler! {
                 return;
             }
             let title = opt_str(title);
+            if tabs::is_deferred(id_of(&browser)) {
+                return;
+            }
             with_tab(id_of(&browser), move |s, tab| {
                 let Some(t) = s.tabs.get_mut(&tab) else { return };
                 t.title = title.clone();
@@ -292,6 +316,7 @@ wrap_life_span_handler! {
 
         fn on_before_close(&self, browser: Option<&mut Browser>) {
             let browser_id = id_of(&browser);
+            super::inject::closed(browser_id);
             later(move |s| {
                 if let Some(BrowserRef::Tab(tab)) = s.browsers.remove(&browser_id) {
                     if s.tabs.get(&tab).is_some_and(|t| t.discarding) {
@@ -339,6 +364,11 @@ wrap_load_handler! {
             let Some(frame) = frame else { return };
             if frame.is_main() == 0 {
                 return;
+            }
+            if self.kind == ClientKind::Content {
+                if let Some(mut b) = browser.as_deref().cloned() {
+                    tabs::deferred_start(&mut b);
+                }
             }
             if self.kind == ClientKind::Ui {
                 let browser_id = id_of(&browser);
@@ -400,7 +430,7 @@ wrap_request_handler! {
     impl RequestHandler {
         fn on_before_browse(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             frame: Option<&mut Frame>,
             request: Option<&mut Request>,
             _user_gesture: ::std::os::raw::c_int,
@@ -421,6 +451,9 @@ wrap_request_handler! {
             if !scheme::navigation_allowed(&current, &target, is_main) {
                 tracing::warn!("blocked navigation from {current:?} to internal page {target}");
                 return 1;
+            }
+            if let (true, Some(browser)) = (is_main, browser) {
+                super::inject::navigation(browser, &target, super::inject::blocking_script);
             }
             0
         }
@@ -619,9 +652,19 @@ wrap_resource_request_handler! {
             browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             request: Option<&mut Request>,
-            _callback: Option<&mut Callback>,
+            callback: Option<&mut Callback>,
         ) -> ReturnValue {
             let Some(request) = request else { return ReturnValue::CONTINUE };
+            // Wait until the content-blocking script for this page is
+            // registered (it must run before the page's own scripts).
+            if request.resource_type() == ResourceType::MAIN_FRAME {
+                if let (Some(b), Some(cb)) = (browser.as_ref(), callback) {
+                    if super::inject::hold(b.identifier(), cb) {
+                        apply_privacy_headers(request);
+                        return ReturnValue::CONTINUE_ASYNC;
+                    }
+                }
+            }
             if ADBLOCK.load(Ordering::Relaxed) {
                 let kind = adblock_type(request.resource_type());
                 if kind != "document" {
@@ -640,16 +683,20 @@ wrap_resource_request_handler! {
                     }
                 }
             }
-            if SEND_DNT.load(Ordering::Relaxed) {
-                for (name, value) in [("DNT", "1"), ("Sec-GPC", "1")] {
-                    request.set_header_by_name(
-                        Some(&crate::engine::cef_str(name)),
-                        Some(&crate::engine::cef_str(value)),
-                        1,
-                    );
-                }
-            }
+            apply_privacy_headers(request);
             ReturnValue::CONTINUE
+        }
+    }
+}
+
+fn apply_privacy_headers(request: &mut Request) {
+    if SEND_DNT.load(Ordering::Relaxed) {
+        for (name, value) in [("DNT", "1"), ("Sec-GPC", "1")] {
+            request.set_header_by_name(
+                Some(&crate::engine::cef_str(name)),
+                Some(&crate::engine::cef_str(value)),
+                1,
+            );
         }
     }
 }

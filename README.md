@@ -19,6 +19,9 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 - Private windows use an in-memory profile that is discarded when the last
   private window closes.
 - Tab sleeping unloads idle background tabs to save memory.
+- Ad and tracker blocking uses EasyList, EasyPrivacy and uBlock Origin's lists
+  and scriptlets. It is on by default for new profiles (Settings > Privacy).
+  See [docs/STATUS.md](docs/STATUS.md) for limits.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
@@ -225,3 +228,6 @@ For the engine update procedure see [docs/ENGINE_UPDATES.md](docs/ENGINE_UPDATES
 - The `cef` Rust bindings (tauri-apps/cef-rs) are licensed under Apache-2.0 or
   MIT.
 - Other Rust dependencies have their own licenses; see `Cargo.lock`.
+- uBlock Origin's scriptlets (`resources/adblock/ubo-scriptlets.json`) are GPL-3.0;
+  they are a separate data file loaded at runtime, shipped with their licence
+  in `adblock/` of the bundle. See `resources/adblock/README.md`.

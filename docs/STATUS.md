@@ -11,18 +11,29 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 ## Ad and tracker blocking
 
-- Implemented in `ferrite-core` (`blocker.rs`) with the `adblock` crate (0.13),
-  using EasyList and EasyPrivacy. Unit-tested in core.
+- Implemented in `ferrite-core` (`blocker.rs`) with the `adblock` crate (0.13).
+  Unit-tested in core.
+- Lists: EasyList and EasyPrivacy (network rules), plus uBlock Origin's own
+  `filters.txt`, `quick-fixes.txt` and `unbreak.txt` from uBlockOrigin/uAssets,
+  loaded as trusted lists.
 - Filter lists are cached in the profile's `filter-lists/` directory. They are
-  refreshed when older than 4 days, using `ureq` with the OS certificate verifier.
+  refreshed when older than 1 day, using `ureq` with the OS certificate verifier.
+- Scriptlets: 149 uBO scriptlets (GPL-3.0) in `resources/adblock/ubo-scriptlets.json`,
+  converted statically by `scripts/build-adblock-resources.py`. Regenerate with
+  `scripts/update-adblock-resources.sh`; see `resources/adblock/README.md`.
 - Requests are checked in a CEF `ResourceRequestHandler` on the IO thread.
-  Top-level navigations are never blocked.
-- Off by default. Toggle: Settings > Privacy, "Block ads and trackers".
-- Verified live: both lists downloaded (2.0 MB + 1.5 MB) and the engine loaded;
-  on cnn.com ad and tracking requests were cancelled (Adobe Launch, Optimizely,
-  Google IMA SDK, tracking pings) while the page loaded normally.
-- Not yet: per-site "disable blocking on this site", cosmetic (element hiding)
-  filters, a blocked-request counter in the toolbar.
+  Top-level navigations are never blocked by network rules.
+- Scriptlets and element-hiding CSS are injected per main-frame navigation
+  (`app/src/browser/inject.rs`); see ARCHITECTURE.md.
+- On by default for new profiles. Toggle: Settings > Privacy, "Block ads and
+  trackers" (`adblock_enabled`).
+- Verified live with the earlier EasyList/EasyPrivacy-only build: both lists
+  downloaded (2.0 MB + 1.5 MB) and the engine loaded; on cnn.com ad and tracking
+  requests were cancelled (Adobe Launch, Optimizely, Google IMA SDK, tracking
+  pings) while the page loaded normally.
+- Not yet: per-site "disable blocking on this site", procedural cosmetic filters
+  (`:has-text()` etc.), generic class/id hiding, a blocked-request counter in the
+  toolbar.
 
 ## Verified
 
@@ -62,6 +73,21 @@ Network traffic went through an HTTPS-intercepting proxy.
 - Private window isolation: cookies and localStorage from the private window are
   not visible in a normal window; no history entry is written.
 - A web page link to `ferrite://settings` is blocked.
+
+### Ad blocking (scriptlets and YouTube rules)
+
+- Local mock YouTube watch page (rules rewritten from youtube.com to
+  youtube.localhost): inline `ytInitialPlayerResponse.adPlacements` became
+  `undefined`; `JSON.parse` output lost `adPlacements` and `playerAds`; the XHR
+  player response lost `adPlacements` through `adSlots`; the fetch response had
+  `adPlacements`/`adSlots` renamed to `no_ads`. With blocking off, all of these
+  were unchanged.
+- Scriptlet injection timing checked for: startup tab, new tabs, same-site and
+  cross-site navigation, server redirect to another host, and reload.
+- Real sites load with blocking on: CNN, Reddit, GitHub, BBC, Wikipedia, Vimeo.
+- Unit tests: trusted vs untrusted lists, aliases, json-prune, CSS. An ignored
+  test checks that the real lists produce all YouTube rule families (script
+  about 78 KB for youtube.com watch pages; generic CSS about 17 KB on news sites).
 
 ### Sessions and crashes
 
@@ -189,6 +215,21 @@ Network traffic went through an HTTPS-intercepting proxy.
   may still refuse a non-Chrome browser; Netflix/Spotify/Disney+ were not
   tested (no accounts).
 
+### Ad blocking
+
+- Real YouTube is not verified: www.youtube.com is blocked from the test
+  container's IP (see Not verified). YouTube changes often. uBO fixes arrive
+  through `quick-fixes.txt`, which is picked up daily, but a new rule that needs
+  a newer scriptlet only works after a Ferrite update.
+- Popups opened by pages (`window.open`, `target=_blank` adopted as tabs) get
+  scriptlets only from their second page or after a reload.
+- Cross-process iframes (for example YouTube embeds on other sites) get no
+  scriptlets. Network blocking still applies to them.
+- Procedural cosmetic filters (`:has-text()` etc.) and generic class/id hiding
+  are not applied.
+- uBO `$redirect` rules act as plain blocks; no redirect resources are served.
+- Private windows behave the same as normal windows.
+
 ### Not implemented
 
 - Password manager.
@@ -252,7 +293,7 @@ For headless testing:
 
 In priority order:
 
-1. Per-site "disable blocking on this site" and cosmetic filtering.
+1. Per-site "disable blocking on this site", procedural and generic cosmetic filtering.
 2. Password manager on the OS secret store (Secret Service through `keyring`).
    No homemade cryptography.
 3. Overlay suggestions dropdown (CEF overlay view) and a download shelf.

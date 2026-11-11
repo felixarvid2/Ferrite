@@ -1,25 +1,67 @@
-//! Ad and tracker blocking with Brave's `adblock` engine and the EasyList /
-//! EasyPrivacy filter lists (Adblock Plus syntax, network rules only).
+//! Ad and tracker blocking with Brave's `adblock` engine: EasyList /
+//! EasyPrivacy plus uBlock Origin's filter lists and scriptlets (the way Brave
+//! blocks YouTube ads).
 //!
 //! Lists are cached in the profile (`filter-lists/`) and refreshed when older
 //! than [`MAX_AGE`]. Blocking never applies to top-level navigations.
+//! [`Blocker::cosmetic`] returns the script and CSS the app injects into pages.
 
 use adblock::lists::{FilterSet, ParseOptions};
 use adblock::request::Request;
+use adblock::resources::{PermissionMask, Resource};
 use adblock::Engine;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-/// Filter lists: (file name, download URL).
-pub const LISTS: &[(&str, &str)] = &[
-    ("easylist.txt", "https://easylist.to/easylist/easylist.txt"),
-    (
-        "easyprivacy.txt",
-        "https://easylist.to/easylist/easyprivacy.txt",
-    ),
+/// A filter list. `trusted` lists may use trusted scriptlets (permission bit 0,
+/// as in Brave); only uBO's own lists are trusted.
+pub struct List {
+    pub name: &'static str,
+    pub url: &'static str,
+    pub trusted: bool,
+}
+
+pub const LISTS: &[List] = &[
+    List {
+        name: "easylist.txt",
+        url: "https://easylist.to/easylist/easylist.txt",
+        trusted: false,
+    },
+    List {
+        name: "easyprivacy.txt",
+        url: "https://easylist.to/easylist/easyprivacy.txt",
+        trusted: false,
+    },
+    List {
+        name: "ubo-filters.txt",
+        url: "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt",
+        trusted: true,
+    },
+    List {
+        name: "ubo-quick-fixes.txt",
+        url:
+            "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/quick-fixes.txt",
+        trusted: true,
+    },
+    List {
+        name: "ubo-unbreak.txt",
+        url: "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/unbreak.txt",
+        trusted: true,
+    },
 ];
 
-pub const MAX_AGE: Duration = Duration::from_secs(4 * 24 * 3600);
+/// uBO's quick-fixes list changes often.
+pub const MAX_AGE: Duration = Duration::from_secs(24 * 3600);
+
+/// Selectors per generated CSS rule; one invalid selector only drops its chunk.
+const CSS_CHUNK: usize = 100;
+
+/// What the app injects into a page: `script` runs in the page's main world at
+/// document start, `css` goes into a style element.
+pub struct Cosmetic {
+    pub script: String,
+    pub css: String,
+}
 
 pub struct Blocker {
     engine: Engine,
@@ -27,24 +69,62 @@ pub struct Blocker {
 }
 
 impl Blocker {
+    /// Untrusted lists, no scriptlet resources.
     pub fn from_lists<S: AsRef<str>>(lists: &[S]) -> Blocker {
+        let lists: Vec<(&str, bool)> = lists.iter().map(|l| (l.as_ref(), false)).collect();
+        Blocker::from_lists_with(&lists, None)
+    }
+
+    /// `lists` are (text, trusted); `resources_json` is a JSON array of
+    /// adblock `Resource`s (uBO scriptlets).
+    pub fn from_lists_with<S: AsRef<str>>(
+        lists: &[(S, bool)],
+        resources_json: Option<&str>,
+    ) -> Blocker {
         let mut set = FilterSet::new(false);
-        for list in lists {
-            set.add_filter_list(list.as_ref().to_string(), ParseOptions::default());
+        for (text, trusted) in lists {
+            let opts = if *trusted {
+                ParseOptions {
+                    permissions: PermissionMask::from_bits(1),
+                    ..Default::default()
+                }
+            } else {
+                ParseOptions::default()
+            };
+            set.add_filter_list(text.as_ref().to_string(), opts);
+        }
+        let mut engine = Engine::new_with_filter_set(set);
+        if let Some(json) = resources_json {
+            match serde_json::from_str::<Vec<Resource>>(json) {
+                Ok(resources) => engine.use_resources(resources),
+                Err(err) => tracing::warn!("invalid scriptlet resources: {err}"),
+            }
         }
         Blocker {
-            engine: Engine::new_with_filter_set(set),
+            engine,
             rule_lists: lists.len(),
         }
     }
 
-    /// Load the cached lists from `dir` (None if none are present).
-    pub fn load_dir(dir: &Path) -> Option<Blocker> {
-        let lists: Vec<String> = LISTS
+    /// Load the cached lists from `dir` (None if none are present) and the
+    /// scriptlet resources from `resources`. A missing or invalid resources
+    /// file only disables scriptlets.
+    pub fn load_dir(dir: &Path, resources: Option<&Path>) -> Option<Blocker> {
+        let lists: Vec<(String, bool)> = LISTS
             .iter()
-            .filter_map(|(name, _)| std::fs::read_to_string(dir.join(name)).ok())
+            .filter_map(|l| Some((std::fs::read_to_string(dir.join(l.name)).ok()?, l.trusted)))
             .collect();
-        (!lists.is_empty()).then(|| Blocker::from_lists(&lists))
+        if lists.is_empty() {
+            return None;
+        }
+        let json = resources.and_then(|path| match std::fs::read_to_string(path) {
+            Ok(json) => Some(json),
+            Err(err) => {
+                tracing::warn!("cannot read scriptlet resources {}: {err}", path.display());
+                None
+            }
+        });
+        Some(Blocker::from_lists_with(&lists, json.as_deref()))
     }
 
     /// Should a subresource request for `url`, made by a page at
@@ -59,6 +139,33 @@ impl Blocker {
             Ok(request) => self.engine.check_network_request(&request).should_block(),
             Err(_) => false,
         }
+    }
+
+    /// Scriptlets and element hiding for a page at `url` (http/https only).
+    /// Procedural cosmetic filters and generic class/id hiding are not
+    /// supported and are ignored. None when there is nothing to inject.
+    pub fn cosmetic(&self, url: &str) -> Option<Cosmetic> {
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return None;
+        }
+        let res = self.engine.url_cosmetic_resources(url);
+        // uBO scriptlets expect a free `scriptletGlobals` object.
+        let script = if res.injected_script.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "(function(){{const scriptletGlobals={{}};try{{{}}}catch(e){{}}}})();",
+                res.injected_script
+            )
+        };
+        let mut selectors: Vec<&str> = res.hide_selectors.iter().map(String::as_str).collect();
+        selectors.sort_unstable();
+        let css: String = selectors
+            .chunks(CSS_CHUNK)
+            .map(|chunk| format!("{}{{display:none!important}}", chunk.join(",")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        (!script.is_empty() || !css.is_empty()).then_some(Cosmetic { script, css })
     }
 }
 
@@ -85,7 +192,7 @@ pub fn update_lists(dir: &Path) -> anyhow::Result<usize> {
         .build()
         .into();
     let mut updated = 0;
-    for (name, url) in LISTS {
+    for List { name, url, .. } in LISTS {
         let path = dir.join(name);
         if !is_stale(&path) {
             continue;
@@ -97,8 +204,9 @@ pub fn update_lists(dir: &Path) -> anyhow::Result<usize> {
                 .read_to_string()
         });
         match body {
-            // Sanity check: real lists are large and start with a header.
-            Ok(text) if text.len() > 10_000 && text.starts_with('[') => {
+            // Sanity check: real lists are large and start with a header
+            // (`[Adblock Plus 2.0]` for EasyList, `! Title:` for uBO).
+            Ok(text) if text.len() > 1000 && (text.starts_with('[') || text.starts_with('!')) => {
                 crate::write_atomic(&path, text.as_bytes())?;
                 updated += 1;
             }
@@ -161,6 +269,116 @@ mod tests {
     #[test]
     fn load_dir_without_lists_is_none() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(Blocker::load_dir(dir.path()).is_none());
+        assert!(Blocker::load_dir(dir.path(), None).is_none());
+    }
+
+    const RESOURCES: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../resources/adblock/ubo-scriptlets.json"
+    );
+
+    fn with_resources(list: &str, trusted: bool) -> Blocker {
+        let json = std::fs::read_to_string(RESOURCES).unwrap();
+        Blocker::from_lists_with(&[(list, trusted)], Some(&json))
+    }
+
+    fn script(b: &Blocker, url: &str) -> String {
+        b.cosmetic(url).map(|c| c.script).unwrap_or_default()
+    }
+
+    const TRUSTED_RULE: &str =
+        "example.com##+js(trusted-rpfr, '\"adPlacements\"', '\"no_ads\"', player?)\n";
+
+    #[test]
+    fn trusted_scriptlet_needs_trusted_list() {
+        let s = script(&with_resources(TRUSTED_RULE, true), "https://example.com/");
+        assert!(s.contains("scriptletGlobals"), "{s}");
+        assert!(s.contains("replace-fetch-response") || s.contains("replaceFetchResponse"));
+        assert!(s.starts_with("(function(){const scriptletGlobals={};try{"));
+        assert!(s.ends_with("catch(e){}})();"));
+        assert!(script(&with_resources(TRUSTED_RULE, false), "https://example.com/").is_empty());
+        assert!(script(&with_resources(TRUSTED_RULE, true), "https://other.org/").is_empty());
+    }
+
+    #[test]
+    fn scriptlet_aliases_resolve() {
+        let b = with_resources(
+            "example.com##+js(set, ytInitialPlayerResponse.adPlacements, undefined)\n",
+            false,
+        );
+        let s = script(&b, "https://example.com/");
+        assert!(s.contains("ytInitialPlayerResponse.adPlacements"), "{s}");
+    }
+
+    #[test]
+    fn json_prune_scriptlet() {
+        let b = with_resources(
+            "example.com##+js(json-prune, adPlacements playerAds)\n",
+            false,
+        );
+        let s = script(&b, "https://example.com/watch");
+        assert!(s.contains("adPlacements"), "{s}");
+    }
+
+    #[test]
+    fn cosmetic_hiding_per_host() {
+        let b = Blocker::from_lists(&["example.com##.ad-banner\nexample.com##.a-first\n"]);
+        let c = b.cosmetic("https://example.com/").unwrap();
+        assert!(c.script.is_empty());
+        assert!(c.css.contains(".ad-banner"));
+        assert!(c.css.contains("display:none!important"));
+        assert!(c.css.starts_with(".a-first,.ad-banner{"), "{}", c.css);
+        assert!(b.cosmetic("https://other.org/").is_none());
+        assert!(b.cosmetic("ftp://example.com/").is_none());
+        assert!(b.cosmetic("about:blank").is_none());
+    }
+
+    #[test]
+    fn css_is_chunked() {
+        let list: String = (0..250).map(|i| format!("example.com##.ad{i}\n")).collect();
+        let c = Blocker::from_lists(&[list])
+            .cosmetic("https://example.com/")
+            .unwrap();
+        assert_eq!(c.css.lines().count(), 3);
+    }
+
+    #[test]
+    fn missing_resources_file_keeps_blocking() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("easylist.txt"), "||ads.example.net^\n").unwrap();
+        let b = Blocker::load_dir(dir.path(), Some(&dir.path().join("nope.json"))).unwrap();
+        assert!(b.should_block("https://ads.example.net/a.js", "https://x.com/", "script"));
+    }
+
+    /// Run with `FERRITE_LISTS_DIR=<dir with downloaded lists> cargo test -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_lists_youtube() {
+        let Ok(dir) = std::env::var("FERRITE_LISTS_DIR") else {
+            return;
+        };
+        let b = Blocker::load_dir(Path::new(&dir), Some(Path::new(RESOURCES))).unwrap();
+        let c = b.cosmetic("https://www.youtube.com/watch?v=x").unwrap();
+        println!("script {} bytes, css {} bytes", c.script.len(), c.css.len());
+        assert!(c.script.contains("adPlacements"));
+        // The rule families uBO uses against YouTube ads (scriptlet function
+        // names as they appear in the injected code).
+        for f in [
+            "function replaceFetchResponseFn",
+            "function jsonPrune",
+            "function setConstant",
+            "function trustedReplaceXhrResponse",
+            "function editInboundObjectFn",
+        ] {
+            assert!(c.script.contains(f), "missing {f}");
+        }
+        for url in [
+            "https://edition.cnn.com/",
+            "https://www.reddit.com/",
+            "https://example.org/",
+        ] {
+            let size = b.cosmetic(url).map(|c| (c.script.len(), c.css.len()));
+            println!("{url}: {size:?}");
+        }
     }
 }

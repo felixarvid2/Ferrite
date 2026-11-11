@@ -60,7 +60,7 @@ impl Default for Settings {
             ask_download_location: false,
             show_bookmarks_bar: true,
             tracking_protection: false,
-            adblock_enabled: false,
+            adblock_enabled: true,
             send_do_not_track: false,
             restore_after_crash: true,
             default_zoom_percent: 100,
