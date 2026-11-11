@@ -79,7 +79,8 @@ class AdBlockSmokeTest {
         val (type, body) = when (path) {
             "/" -> "text/html" to page
             "/ok.js" -> { okHits.incrementAndGet(); "application/javascript" to "window.okLoaded=true;" }
-            else -> { blockedHits.incrementAndGet(); "application/javascript" to "window.blockedRan=true;" }
+            "/ferrite-blocked.js" -> { blockedHits.incrementAndGet(); "application/javascript" to "window.blockedRan=true;" }
+            else -> "text/plain" to "" // favicon.ico and the like
         }
         val bytes = body.toByteArray()
         out.write("HTTP/1.1 200 OK\r\nContent-Type: $type\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
