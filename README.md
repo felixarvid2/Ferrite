@@ -135,6 +135,26 @@ On Linux and Windows, `Ctrl` is the modifier. On macOS, `Cmd` is used.
 | Print | `Ctrl+P` |
 | Quit | `Ctrl+Shift+Q` |
 
+## Packages (.deb / AppImage)
+
+```sh
+sudo apt install librsvg2-bin          # icon rendering for the packager
+scripts/package.sh                     # both, or --deb-only / --appimage-only
+sudo apt install ./dist/ferrite_0.1.0_amd64.deb
+```
+
+- **.deb** installs to `/opt/ferrite` with `/usr/bin/ferrite`, a desktop entry
+  (handles http/https/HTML, "New Window" and "New Private Window" actions),
+  icons, the setuid `chrome-sandbox` helper and an AppArmor profile that lets
+  the sandbox use user namespaces on Ubuntu 23.10+. It also registers
+  `x-www-browser`. To make it the desktop's default browser:
+  `xdg-settings set default-web-browser ferrite.desktop`.
+- **AppImage** is a single file with no install step. It cannot carry the
+  setuid sandbox helper, so on Ubuntu 23.10+ (which restricts user namespaces)
+  use the .deb. The AppImage prints a warning there and never disables the
+  sandbox itself. The packager downloads `appimagetool` from the AppImage
+  project's GitHub releases.
+
 ## Profiles & data locations
 
 Each profile has its own directory. The default data directory is

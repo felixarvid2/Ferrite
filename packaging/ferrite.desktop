@@ -1,0 +1,23 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ferrite
+GenericName=Web Browser
+Comment=Browse the web
+Exec=ferrite %U
+Icon=ferrite
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=Ferrite
+Keywords=browser;web;internet;
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=ferrite
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Exec=ferrite --private

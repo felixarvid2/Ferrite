@@ -1,0 +1,11 @@
+# Lets Chromium's sandbox create user namespaces on Ubuntu 23.10+, which
+# restricts them for unconfined programs by default (same approach as the
+# AppArmor profiles shipped for Chrome and other Chromium browsers).
+abi <abi/4.0>,
+include <tunables/global>
+
+profile ferrite /opt/ferrite/ferrite flags=(unconfined) {
+  userns,
+
+  include if exists <local/ferrite>
+}

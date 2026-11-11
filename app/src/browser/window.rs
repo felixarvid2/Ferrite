@@ -380,6 +380,7 @@ wrap_window_delegate! {
                 window.set_background_color(frame_color);
             }
             window.show();
+            set_wm_class(window);
             if self.maximized {
                 window.maximize();
             }
@@ -524,3 +525,37 @@ pub fn window_action(s: &mut State, win: WinId, action: &str) {
         _ => {}
     }
 }
+
+/// Set WM_CLASS "ferrite"/"Ferrite" on the native X11 window, matching
+/// StartupWMClass in packaging/ferrite.desktop so docks show Ferrite's icon.
+/// (CEF's LinuxWindowProperties would do this, but cef-rs drops owned strings
+/// written into out-parameter structs, and Chromium's --class switch does
+/// not reach Views windows.)
+#[cfg(target_os = "linux")]
+fn set_wm_class(window: &Window) {
+    use std::ffi::CString;
+    let xid = window.window_handle();
+    let display = get_xdisplay();
+    if xid == 0 || display.is_null() {
+        return; // Wayland/ozone or not yet mapped: nothing to do.
+    }
+    let Ok(xlib) = x11_dl::xlib::Xlib::open() else {
+        return;
+    };
+    let (Ok(name), Ok(class)) = (CString::new("ferrite"), CString::new("Ferrite")) else {
+        return;
+    };
+    let mut hint = x11_dl::xlib::XClassHint {
+        res_name: name.as_ptr() as *mut _,
+        res_class: class.as_ptr() as *mut _,
+    };
+    // SAFETY: `display` is CEF's live X display, `xid` our window, and the
+    // hint strings outlive the calls.
+    unsafe {
+        (xlib.XSetClassHint)(display.cast(), xid, &mut hint);
+        (xlib.XFlush)(display.cast());
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn set_wm_class(_window: &Window) {}

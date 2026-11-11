@@ -113,6 +113,23 @@ Network traffic went through an HTTPS-intercepting proxy.
   switching tabs and opening a new tab by mouse in the sidebar.
 - Not checked: drag-reordering in the sidebar, many tabs (scrolling).
 
+### Packaging
+
+- `scripts/package.sh --deb-only` built `dist/ferrite_0.1.0_amd64.deb` (134 MB).
+  `apt install ./dist/...deb` resolved its dependencies and installed it on
+  Ubuntu 24.04. Checks: `/opt/ferrite/chrome-sandbox` is `-rwsr-xr-x root`,
+  `x-www-browser` points to `/usr/bin/ferrite`, the desktop file passes
+  `desktop-file-validate` and is in the MIME cache for http/https, and the
+  icons are installed. `ferrite` started from `/usr/bin` and opened a window
+  with `WM_CLASS "ferrite", "Ferrite"` (matching `StartupWMClass`).
+- WM_CLASS is set with Xlib: cef-rs loses strings written to
+  `LinuxWindowProperties`, and Chromium's `--class` switch does not reach
+  Views windows.
+- Not tested: the AppImage (the container's safety policy blocked running the
+  downloaded `appimagetool`), the AppArmor profile (no AppArmor in the
+  container), the sandbox from the installed package (tests run as root with
+  `--no-sandbox`), and `xdg-settings` on a real desktop.
+
 ### Release bundle
 
 - The release bundle in `dist/` runs standalone with the embedded UI.
