@@ -375,12 +375,13 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     fun load(tab: Tab, url: String, show: Boolean = true) {
+        val wasCurrent = tab === current
+        // Create the WebView while tab.url is still empty so that ensureWebView does not load it too.
+        val wv = ensureWebView(tab)
         tab.url = if (url == "about:blank") "" else url
         tab.hasPage = true
         tab.topUrl = url
         tab.blocked.set(0)
-        val wasCurrent = tab === current
-        val wv = ensureWebView(tab)
         if (wasCurrent && show && wv.parent == null) {
             content.removeAllViews()
             content.addView(wv, ViewGroup.LayoutParams(-1, -1))
@@ -388,7 +389,6 @@ class BrowserActivity : AppCompatActivity() {
         }
         // Register the document-start script for the target before navigating.
         DocumentStart.prepare(tab, url, settings)
-        if (tab.url.isEmpty() && url != "about:blank") tab.url = url
         wv.loadUrl(url)
         if (wasCurrent) hideKeyboard()
         updateUi()
@@ -519,7 +519,7 @@ class BrowserActivity : AppCompatActivity() {
                     } else {
                         site?.let { settings.addException(it) }
                     }
-                    tab.scriptKey = null
+                    DocumentStart.prepare(tab, tab.url, settings)
                     tab.webView?.reload()
                 }
                 2 -> startActivity(Intent(this, SettingsActivity::class.java))

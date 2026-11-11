@@ -9,6 +9,14 @@ openbox, no GPU, run as root with `--no-sandbox`. Input was sent with real X
 events (xdotool) and results were read through the Chrome DevTools Protocol.
 Network traffic went through an HTTPS-intercepting proxy.
 
+## Android port
+
+`android/` holds Ferrite for Android (Kotlin, Android System WebView, adblock-rust over JNI); see
+[android/README.md](../android/README.md). Verified: host tests of the Rust crate, Kotlin unit tests, and
+(in CI, `ferrite-android.yml`) the release build and an emulator smoke test of blocking plus document-start
+scriptlet timing. Not verified: real-world sites (YouTube ads), real devices, ABIs other than x86_64 at runtime,
+low-memory phones. No Proton Pass, no extensions.
+
 ## Ad and tracker blocking
 
 - Implemented in `ferrite-core` (`blocker.rs`) with the `adblock` crate (0.13).

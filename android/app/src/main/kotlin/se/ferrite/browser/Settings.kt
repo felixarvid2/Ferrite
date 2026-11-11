@@ -19,10 +19,9 @@ class Settings(ctx: Context) {
     @Volatile private var adblockCached = prefs.getBoolean(ADBLOCK, true)
     @Volatile private var exceptionsCached: Set<String> = prefs.getStringSet(EXCEPTIONS, emptySet()).orEmpty().toSet()
     private val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-        when (key) {
-            ADBLOCK -> adblockCached = p.getBoolean(ADBLOCK, true)
-            EXCEPTIONS -> exceptionsCached = p.getStringSet(EXCEPTIONS, emptySet()).orEmpty().toSet()
-        }
+        // key is null when the whole file was cleared (API 30+).
+        if (key == null || key == ADBLOCK) adblockCached = p.getBoolean(ADBLOCK, true)
+        if (key == null || key == EXCEPTIONS) exceptionsCached = p.getStringSet(EXCEPTIONS, emptySet()).orEmpty().toSet()
     }
 
     init {

@@ -186,7 +186,7 @@ mod tests {
     fn ip_and_localhost_hosts_work_with_ports() {
         // The emulator test serves its page from these.
         let b = with_resources(
-            "127.0.0.1##+js(set-constant, ferriteMarker, ok)\nlocalhost##+js(set-constant, ferriteMarker, ok)\n/ferrite-blocked.js\n",
+            "127.0.0.1##+js(set-constant, ferriteMarker, true)\nlocalhost##+js(set-constant, ferriteMarker, ok)\n/ferrite-blocked.js\n",
             false,
         );
         for url in ["http://127.0.0.1:8123/", "http://localhost:8123/"] {

@@ -33,6 +33,12 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
+## Android
+
+[android/](android/README.md) is Ferrite for Android: a browser on Android System WebView with the
+same ad blocking (adblock-rust, EasyList/EasyPrivacy, uBlock Origin scriptlets), tabs, bookmarks, history
+and downloads. One APK, no Proton Pass, no extensions. CI: `.github/workflows/ferrite-android.yml`.
+
 ## Status
 
 See [docs/STATUS.md](docs/STATUS.md) for verified features, untested areas,

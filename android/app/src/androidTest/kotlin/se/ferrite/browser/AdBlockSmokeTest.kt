@@ -42,10 +42,12 @@ class AdBlockSmokeTest {
         assertTrue("libferrite_android.so is not in the APK", se.ferrite.browser.adblock.Native.loaded)
         assertTrue("WebView lacks DOCUMENT_START_SCRIPT", WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT))
         ctx.app.settings.prefs.edit().clear().commit()
+        ctx.app.settings.exceptions = emptySet()
+        ctx.app.settings.adblock = true
         assertTrue(
             AdBlocker.installForTest(
                 ctx,
-                "/ferrite-blocked.js\nlocalhost##+js(set-constant, ferriteMarker, ok)\n",
+                "/ferrite-blocked.js\nlocalhost##+js(set-constant, ferriteMarker, true)\n",
             ),
         )
         server = ServerSocket(0, 10, InetAddress.getByName("127.0.0.1"))
@@ -67,17 +69,22 @@ class AdBlockSmokeTest {
 
     private fun serve(s: java.net.Socket) = s.use {
         val path = it.getInputStream().bufferedReader().readLine().split(" ")[1]
+        val out = it.getOutputStream()
+        if (path == "/go") {
+            // Cross-origin redirect: the script must be registered for the redirect target.
+            out.write("HTTP/1.1 302 Found\r\nLocation: http://localhost:${server.localPort}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+            out.flush()
+            return@use
+        }
         val (type, body) = when (path) {
             "/" -> "text/html" to page
             "/ok.js" -> { okHits.incrementAndGet(); "application/javascript" to "window.okLoaded=true;" }
             else -> { blockedHits.incrementAndGet(); "application/javascript" to "window.blockedRan=true;" }
         }
         val bytes = body.toByteArray()
-        it.getOutputStream().apply {
-            write("HTTP/1.1 200 OK\r\nContent-Type: $type\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
-            write(bytes)
-            flush()
-        }
+        out.write("HTTP/1.1 200 OK\r\nContent-Type: $type\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+        out.write(bytes)
+        out.flush()
     }
 
     private fun pageTitle(url: String, until: (String) -> Boolean): String {
@@ -98,7 +105,7 @@ class AdBlockSmokeTest {
     @Test fun blocksSubresourceAndRunsScriptletBeforeInlineScript() {
         val url = "http://localhost:${server.localPort}/"
         val title = pageTitle(url) { it.startsWith("done;") }
-        assertEquals("done;marker=ok;blockedFailed=true;blockedRan=false;ok=true", title)
+        assertEquals("done;marker=true;blockedFailed=true;blockedRan=false;ok=true", title)
         assertEquals("blocked request must not reach the network", 0, blockedHits.get())
         assertTrue(okHits.get() >= 1)
     }
@@ -108,5 +115,10 @@ class AdBlockSmokeTest {
         ctx.app.settings.addException("localhost")
         val title = pageTitle("http://localhost:$port/") { it.startsWith("done;") }
         assertEquals("done;marker=undefined;blockedFailed=false;blockedRan=true;ok=true", title)
+    }
+
+    @Test fun scriptletAppliesAfterCrossOriginRedirect() {
+        val title = pageTitle("http://127.0.0.1:${server.localPort}/go") { it.startsWith("done;") }
+        assertEquals("done;marker=true;blockedFailed=true;blockedRan=false;ok=true", title)
     }
 }
