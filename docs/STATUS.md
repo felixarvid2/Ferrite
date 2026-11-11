@@ -125,8 +125,10 @@ Network traffic went through an HTTPS-intercepting proxy.
 - WM_CLASS is set with Xlib: cef-rs loses strings written to
   `LinuxWindowProperties`, and Chromium's `--class` switch does not reach
   Views windows.
-- Not tested: the AppImage (the container's safety policy blocked running the
-  downloaded `appimagetool`), the AppArmor profile (no AppArmor in the
+- AppImage: `scripts/package.sh --appimage-only` built a 170 MB
+  `Ferrite-0.1.0-x86_64.AppImage`; it started and opened a window (run with
+  `APPIMAGE_EXTRACT_AND_RUN=1`, since the container has no FUSE).
+- Not tested: the AppArmor profile (no AppArmor in the
   container), the sandbox from the installed package (tests run as root with
   `--no-sandbox`), and `xdg-settings` on a real desktop.
 
@@ -170,18 +172,22 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 ### Media and DRM
 
-- No H.264 or AAC. The standard CEF builds do not include proprietary codecs
-  (`canPlayType` returns "" for `avc1` and `mp4a`). Sites that serve only H.264
-  (some news video players, X/Twitter video, some streaming) will not play.
-  YouTube normally serves VP9 or AV1 with Opus, so it should play.
-  `scripts/build-cef-codecs.sh` builds the pinned CEF with
-  `proprietary_codecs=true ffmpeg_branding=Chrome` on your machine (about
-  120 GB of disk and hours of build time; not run in the dev container) and
-  installs it for `CEF_PATH`. H.264/AAC playback was verified against a
-  third-party codec build of the same CEF branch. See docs/CODECS.md for the steps, the one
-  third-party prebuilt found and the licensing issues. `ferrite://about/`
-  shows which codecs a build supports.
-- No Widevine DRM. Netflix, the Spotify web player and Disney+ will not play.
+- No H.264 or AAC in the standard CEF build (`canPlayType` returns "" for
+  `avc1` and `mp4a`). Sites that serve only H.264 (some news players,
+  X/Twitter video) will not play; YouTube serves VP9/AV1 and plays.
+  Without building Chromium: `scripts/setup-cef.sh --codecs` downloads a
+  third-party codec build (obs-rust, CEF 156.0.8, sha256-pinned) and installs
+  it into `~/.local/share/cef-codecs`; it is an older Chromium patch release.
+  Building it yourself: `scripts/build-cef-codecs.sh` (about 120 GB of disk).
+  H.264/AAC playback was verified with the third-party build. See
+  docs/CODECS.md. `ferrite://about/` shows which codecs a build supports.
+- Widevine DRM works in the standard build: Chromium's component updater
+  downloads the Widevine CDM into the profile (`<profile>/cef/WidevineCdm/`)
+  on first run; it is used after a restart. Verified: Widevine-encrypted VP9
+  test content (Shaka demo assets) played. Services that require H.264 with
+  Widevine, or hardware-backed DRM (Netflix in HD), need the codec build and
+  may still refuse a non-Chrome browser; Netflix/Spotify/Disney+ were not
+  tested (no accounts).
 
 ### Not implemented
 

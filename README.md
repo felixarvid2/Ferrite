@@ -153,7 +153,8 @@ sudo apt install ./dist/ferrite_0.1.0_amd64.deb
   setuid sandbox helper, so on Ubuntu 23.10+ (which restricts user namespaces)
   use the .deb. The AppImage prints a warning there and never disables the
   sandbox itself. The packager downloads `appimagetool` from the AppImage
-  project's GitHub releases.
+  project's GitHub releases. Without FUSE, run it with
+  `APPIMAGE_EXTRACT_AND_RUN=1`.
 
 ## Profiles & data locations
 

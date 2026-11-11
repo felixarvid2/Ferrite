@@ -4,8 +4,14 @@ The standard CEF builds that `scripts/setup-cef.sh` downloads (from
 cef-builds.spotifycdn.com) are built **without** proprietary codecs. Ferrite
 then plays WebM/VP9/AV1/Opus/MP3 but not MP4 with H.264/AAC
 (`DEMUXER_ERROR_NO_SUPPORTED_STREAMS`). Sites that only serve H.264 video
-won't play. YouTube normally serves VP9/AV1 and works. DRM (Widevine) is a
-separate topic and is not covered here.
+won't play. YouTube normally serves VP9/AV1 and works.
+
+Quick route without building Chromium (third-party build, see Option B):
+
+```sh
+scripts/setup-cef.sh --codecs     # download, verify sha256, install into ~/.local/share/cef-codecs
+CEF_PATH=$HOME/.local/share/cef-codecs cargo build --release
+```
 
 Check what your build plays at `ferrite://about/` ("Media codecs").
 
@@ -67,6 +73,9 @@ built for OBS with `proprietary_codecs=true ffmpeg_branding=Chrome`.
   156.0.8078.48. The standard build gives `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`
   for the same file.
 
+`scripts/setup-cef.sh --codecs` does these steps (download, sha256 check,
+extract, `--install-only`); tested end to end. By hand:
+
 ```sh
 curl -LO https://github.com/obs-rust/cef/releases/download/8078/cef_binary_8078_linux_x86_64.tar.xz
 echo "fb36df11bc8280c9cb666732becc1fe267f833bb964dbb13d69cad33488171dc  cef_binary_8078_linux_x86_64.tar.xz" | sha256sum -c -
@@ -74,6 +83,15 @@ tar -xJf cef_binary_8078_linux_x86_64.tar.xz
 scripts/build-cef-codecs.sh --install-only cef_binary_8078_linux_x86_64
 CEF_PATH=$HOME/.local/share/cef-codecs cargo build --release
 ```
+
+## Widevine (DRM)
+
+Widevine needs no special build. CEF's component updater downloads the
+Widevine CDM into `<profile>/cef/WidevineCdm/<version>/` on the first run,
+and Chromium loads it on the next start. Verified in the standard build:
+Widevine-encrypted VP9 content played. H.264 content protected with Widevine
+additionally needs a codec build. Some services (Netflix, Disney+) check the
+browser and require hardware-backed DRM for HD; this was not tested.
 
 ## Licensing
 
