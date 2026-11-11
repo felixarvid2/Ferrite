@@ -26,6 +26,10 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 - Ad and tracker blocking uses EasyList, EasyPrivacy and uBlock Origin's lists
   and scriptlets. It is on by default for new profiles (Settings > Privacy).
   See [docs/STATUS.md](docs/STATUS.md) for limits.
+- Update check: Ferrite asks `api.github.com` once a day whether a newer release
+  exists and offers a link in the menu and on `ferrite://about/`. It sends one
+  anonymous request with the user agent `Ferrite/<version>` and installs
+  nothing. Turn it off in Settings > Privacy and security (Check for updates).
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
@@ -104,6 +108,7 @@ Environment variables:
 | `FERRITE_DATA_DIR` | Base data directory (default `~/.local/share/ferrite`). |
 | `RUST_LOG` | Log filter for `tracing` output, e.g. `RUST_LOG=ferrite=debug`. |
 | `FERRITE_UI_DIR` | Serve the UI files from this directory instead of the embedded copy. Useful while editing `ui/`. |
+| `FERRITE_UPDATE_URL` | For tests only: replaces the GitHub releases URL of the update check (https, or http on localhost). |
 
 ## Keyboard shortcuts
 

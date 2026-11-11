@@ -21,6 +21,7 @@ pub mod scheme;
 pub mod session;
 pub mod tabs;
 pub mod theme;
+pub mod updates;
 pub mod window;
 
 use crate::engine::{self, cef_str};
@@ -271,6 +272,7 @@ pub fn start() {
     }
     schedule_housekeeping();
     with_state(|s| {
+        updates::init(s);
         passwords::apply_capture_flag(s);
         if s.settings.proton_pass {
             passwords::tick(s);
@@ -284,11 +286,12 @@ fn state_dnt() -> bool {
     with_state(|s| s.settings.send_do_not_track).unwrap_or(false)
 }
 
-/// Periodic work: tab sleeping.
+/// Periodic work: tab sleeping, password cache, update check.
 fn schedule_housekeeping() {
     engine::post_local_delayed(60_000, || {
         with_state(tabs::sleep_idle_tabs);
         with_state(passwords::tick);
+        with_state(updates::tick);
         schedule_housekeeping();
     });
 }

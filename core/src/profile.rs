@@ -12,6 +12,8 @@ pub struct ProfilePaths {
     pub settings: PathBuf,
     pub session: PathBuf,
     pub filter_lists: PathBuf,
+    /// Last update check and the update it found.
+    pub update_state: PathBuf,
 }
 
 impl ProfilePaths {
@@ -42,6 +44,7 @@ impl ProfilePaths {
             settings: root.join("settings.json"),
             session: root.join("session.json"),
             filter_lists: root.join("filter-lists"),
+            update_state: root.join("update.json"),
             root,
         })
     }
@@ -74,6 +77,7 @@ mod tests {
         assert_eq!(p.settings, base.join("profiles/default/settings.json"));
         assert_eq!(p.session, base.join("profiles/default/session.json"));
         assert_eq!(p.filter_lists, base.join("profiles/default/filter-lists"));
+        assert_eq!(p.update_state, base.join("profiles/default/update.json"));
     }
 
     #[test]

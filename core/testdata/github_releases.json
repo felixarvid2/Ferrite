@@ -1,0 +1,74 @@
+[
+ {
+  "tag_name": "ferrite-v0.1.1",
+  "html_url": "https://github.com/felixarvid2/test/releases/tag/ferrite-v0.1.1",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-11T09:05:48Z",
+  "assets": [
+   {
+    "name": "Ferrite-0.1.1-x86_64.AppImage",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.1/Ferrite-0.1.1-x86_64.AppImage",
+    "size": 177895928
+   },
+   {
+    "name": "ferrite_0.1.1_amd64.deb",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.1/ferrite_0.1.1_amd64.deb",
+    "size": 140539784
+   },
+   {
+    "name": "SHA256SUMS",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.1/SHA256SUMS",
+    "size": 186
+   }
+  ]
+ },
+ {
+  "tag_name": "ferrite-v0.1.0",
+  "html_url": "https://github.com/felixarvid2/test/releases/tag/ferrite-v0.1.0",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-11T07:45:05Z",
+  "assets": [
+   {
+    "name": "Ferrite-0.1.0-x86_64.AppImage",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.0/Ferrite-0.1.0-x86_64.AppImage",
+    "size": 177691128
+   },
+   {
+    "name": "ferrite_0.1.0_amd64.deb",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.0/ferrite_0.1.0_amd64.deb",
+    "size": 140278456
+   },
+   {
+    "name": "SHA256SUMS",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/ferrite-v0.1.0/SHA256SUMS",
+    "size": 186
+   }
+  ]
+ },
+ {
+  "tag_name": "assets-large-v1",
+  "html_url": "https://github.com/felixarvid2/test/releases/tag/assets-large-v1",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-06T09:20:54Z",
+  "assets": [
+   {
+    "name": "Animations_V1_01.zip",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/assets-large-v1/Animations_V1_01.zip",
+    "size": 1005326588
+   },
+   {
+    "name": "Horror.SFX.Free.zip",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/assets-large-v1/Horror.SFX.Free.zip",
+    "size": 220233803
+   },
+   {
+    "name": "RetroWeaponPack_V1.zip",
+    "browser_download_url": "https://github.com/felixarvid2/test/releases/download/assets-large-v1/RetroWeaponPack_V1.zip",
+    "size": 506061250
+   }
+  ]
+ }
+]

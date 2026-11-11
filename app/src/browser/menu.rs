@@ -37,15 +37,26 @@ const ITEMS: &[(i32, &str, Option<Command>)] = &[
     (17, "Quit\tCtrl+Shift+Q", Some(Command::Quit)),
 ];
 
+/// Menu id of the "Update available" item (opens the release page).
+const UPDATE_ITEM: i32 = 18;
+
 pub fn show(s: &super::State, win: WinId, x: i32, y: i32) {
     let Some(w) = s.windows.get(&win) else { return };
     let Some(window) = w.window.clone() else {
         return;
     };
-    let mut delegate = MainMenuDelegate::new(win);
+    let update = super::updates::available(s);
+    let mut delegate = MainMenuDelegate::new(win, update.as_ref().map(|u| u.url.clone()));
     let Some(model) = menu_model_create(Some(&mut delegate)) else {
         return;
     };
+    if let Some(u) = &update {
+        model.add_item(
+            UPDATE_ITEM,
+            Some(&cef_str(&format!("Update available: {}", u.version))),
+        );
+        model.add_separator();
+    }
     for (id, label, _) in ITEMS {
         if *id == 0 {
             model.add_separator();
@@ -66,10 +77,20 @@ pub fn show(s: &super::State, win: WinId, x: i32, y: i32) {
 wrap_menu_model_delegate! {
     struct MainMenuDelegate {
         win: WinId,
+        update_url: Option<String>,
     }
 
     impl MenuModelDelegate {
         fn execute_command(&self, _menu_model: Option<&mut MenuModel>, command_id: ::std::os::raw::c_int, _event_flags: EventFlags) {
+            if command_id == UPDATE_ITEM {
+                if let Some(url) = self.update_url.clone() {
+                    let win = self.win;
+                    later(move |s| {
+                        super::tabs::new_tab(s, win, &url, super::tabs::NewTab::foreground());
+                    });
+                }
+                return;
+            }
             let Some(command) = ITEMS.iter().find(|(id, _, _)| *id == command_id).and_then(|(_, _, c)| *c) else {
                 return;
             };

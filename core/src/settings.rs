@@ -55,6 +55,8 @@ pub struct Settings {
     pub proton_pass_vault: String,
     /// Sites (site keys like `adblock_exceptions`) never offered for saving.
     pub proton_pass_never_save: Vec<String>,
+    /// Ask api.github.com once a day whether a newer Ferrite release exists.
+    pub check_for_updates: bool,
 }
 
 impl Default for Settings {
@@ -85,6 +87,7 @@ impl Default for Settings {
             proton_pass_offer_save: true,
             proton_pass_vault: String::new(),
             proton_pass_never_save: Vec::new(),
+            check_for_updates: true,
         }
     }
 }
@@ -159,6 +162,7 @@ mod tests {
         assert!(!s.proton_pass && s.proton_pass_cli.is_empty());
         assert!(!s.download_dir.is_empty());
         assert!(s.proton_pass_offer_save);
+        assert!(s.check_for_updates);
         assert!(s.proton_pass_vault.is_empty() && s.proton_pass_never_save.is_empty());
     }
 
@@ -187,6 +191,14 @@ mod tests {
         s.save(&p).unwrap();
         assert!(!dir.path().join("a/b/settings.json.tmp").exists());
         assert_eq!(Settings::load(&p), s);
+    }
+
+    #[test]
+    fn old_settings_file_defaults_update_check_on() {
+        let s: Settings = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
+        assert!(s.check_for_updates);
+        let s: Settings = serde_json::from_str(r#"{"check_for_updates":false}"#).unwrap();
+        assert!(!s.check_for_updates);
     }
 
     #[test]

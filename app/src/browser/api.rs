@@ -529,6 +529,8 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                 "private": private,
             })
         }
+        "update_status" => super::updates::status(s),
+        "update_check" => super::updates::check_now(s),
         "about" => json!({
             "ferrite": env!("CARGO_PKG_VERSION"),
             "cef": runtime_version(&[0, 1, 2]),

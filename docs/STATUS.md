@@ -87,6 +87,30 @@ Network traffic went through an HTTPS-intercepting proxy.
   not visible in a normal window; no history entry is written.
 - A web page link to `ferrite://settings` is blocked.
 
+### Update check
+
+- `core/src/update.rs` parses `https://api.github.com/repos/felixarvid2/test/releases?per_page=20`
+  and picks the newest non-draft, non-prerelease `ferrite-v*` tag by semver
+  (other tags such as `assets-large-v1` are ignored). Nothing is downloaded or
+  installed; the deb needs root, so the user installs it.
+- `app/src/browser/updates.rs` runs it on a background thread (ureq, platform
+  verifier, 20 s timeout, 1 MB limit, user agent `Ferrite/<version>`). First
+  check 30 s after start, then via the 60 s housekeeping tick every 24 h, never
+  within 6 h of the last attempt. The last attempt time and the found update
+  are kept in `update.json` in the profile (not in settings). "Check now" is
+  not rate limited. Setting `check_for_updates` (default on) stops all
+  automatic requests.
+- UI: the main menu gets "Update available: x.y.z" (opens the release page in a
+  new tab) and ferrite://about/ shows the release and download links or "up to
+  date (checked ...)" with Check now (API `update_check`, `update_status`; the
+  page polls because API calls are synchronous on the UI thread).
+- `FERRITE_UPDATE_URL` (testing only) overrides the URL.
+- Verified in the real browser (e2e, local http server): menu item and its click,
+  about page links, Check now to "up to date", persisted update after restart
+  with no request within 6 h, no request at all with the setting off. The live
+  api.github.com response (ferrite-v0.1.1, ferrite-v0.1.0, assets-large-v1) is
+  parsed (ignored test `live_github` and a trimmed fixture test).
+
 ### Ad blocking (scriptlets and YouTube rules)
 
 - Local mock YouTube watch page (rules rewritten from youtube.com to
@@ -507,7 +531,7 @@ Network traffic went through an HTTPS-intercepting proxy.
 - Spell-check UI.
 - Reader mode.
 - Per-site zoom memory (Chromium may keep it).
-- Automatic updates.
+- Automatic download and installation of updates (only the check exists).
 - Overlay suggestions dropdown: the dropdown pushes the page down instead of
   overlaying it.
 - Download shelf.

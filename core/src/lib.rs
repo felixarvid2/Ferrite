@@ -15,6 +15,7 @@ pub mod profile;
 pub mod search;
 pub mod session;
 pub mod settings;
+pub mod update;
 
 use std::path::Path;
 
