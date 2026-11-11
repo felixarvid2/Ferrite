@@ -14,8 +14,18 @@
 //! answers (or 2 minutes pass, or the tab closes); the UI strip only gets
 //! `{id, site, username}`. It is written with `pass-cli item create login
 //! --from-template -`, the JSON going through stdin (argv is world-readable
-//! in /proc). Not offered in private windows, for sites on the never list, or
-//! when the same username already has a cached login for the site.
+//! in /proc). Not offered in private windows or for sites on the never list.
+//!
+//! Updating a password: when the cached login for the site and username
+//! already exists, its stored password is fetched in the background (as for a
+//! fill) and compared in Rust; the same password offers nothing, a different
+//! one shows "Update password for <username> on <site>?". `item update` only
+//! takes values in argv (visible in /proc), so Update recreates the item: it
+//! reads `item view --output json`, creates a copy with the new password via
+//! stdin, and only then moves the old item to the trash (the item id changes).
+//! Items with data the create template cannot carry (note, attachments,
+//! passkeys, custom sections) are never touched; the user is told to use the
+//! Proton Pass app.
 //!
 //! 2FA: for logins with a TOTP secret the menu has an extra "2FA code" item;
 //! the code (not the secret) is fetched with `pass-cli item totp`, checked
@@ -63,9 +73,24 @@ struct CountMemo {
     count: usize,
 }
 
+/// What a [`SavePrompt`] asks.
+enum PromptKind {
+    /// "Save password for <site>?" (no cached login for the username).
+    Save,
+    /// A cached login has this username: its password is being fetched to see
+    /// whether the new one differs. Not shown.
+    Checking,
+    /// "Update password for <username> on <site>?": the password differs.
+    Update(Login),
+    /// The login has data Ferrite cannot copy; only an OK button. The
+    /// password is already dropped.
+    Blocked,
+}
+
 /// A login captured on a page, waiting for the user's answer. Holds the
 /// password: never log it, never send it to a page or UI.
 struct SavePrompt {
+    kind: PromptKind,
     id: String,
     tab: TabId,
     /// Site key (host without "www.") the login was submitted on.
@@ -893,10 +918,7 @@ pub fn capture(s: &mut State, browser_id: i32, url: String, payload: String) {
         tracing::debug!("login capture ignored: empty or oversized values");
         return;
     }
-    if passcli::has_login_for(&s.passwords.logins, &url, &username) {
-        tracing::debug!("login capture ignored: login already saved");
-        return;
-    }
+    let existing = passcli::existing_login(&s.passwords.logins, &url, &username).cloned();
     let Ok(parsed) = url::Url::parse(&url) else {
         return;
     };
@@ -909,36 +931,106 @@ pub fn capture(s: &mut State, browser_id: i32, url: String, payload: String) {
     }
     store.prompt_seq += 1;
     let id = random_id(store.prompt_seq);
+    let password = p.password;
+    let compare = existing.is_some().then(|| password.clone());
     store.save_prompts.push(SavePrompt {
+        kind: if existing.is_some() {
+            PromptKind::Checking
+        } else {
+            PromptKind::Save
+        },
         id: id.clone(),
         tab,
         site,
         origin,
         username,
-        password: p.password,
+        password,
     });
-    expire_prompt(id);
+    expire_prompt(id.clone());
+    if let (Some(login), Some(new_password)) = (existing, compare) {
+        start_check(s, id, login, new_password);
+    }
     s.mark_dirty(win);
+}
+
+/// A cached login matches the submitted site and username: fetch its stored
+/// password in the background and compare. Passwords are not cached, so this
+/// is the only way to know whether an update is needed. Only the verdict
+/// comes back to the UI thread.
+fn start_check(s: &mut State, id: String, login: Login, new_password: String) {
+    let cli = (passcli::valid_id(&login.share_id) && passcli::valid_id(&login.item_id))
+        .then(|| resolve_cli(&s.settings.proton_pass_cli))
+        .flatten();
+    let Some(cli) = cli else {
+        s.passwords.save_prompts.retain(|p| p.id != id);
+        return;
+    };
+    std::thread::spawn(move || {
+        let differs = std::panic::catch_unwind(|| {
+            fetch_password(&cli, &login).map(|stored| stored != new_password)
+        })
+        .unwrap_or_else(|_| Err("internal error".into()));
+        drop(new_password);
+        engine::post_ui(move || {
+            super::with_state(|s| finish_check(s, &id, login, differs));
+        });
+    });
+}
+
+fn finish_check(s: &mut State, id: &str, login: Login, differs: Result<bool, String>) {
+    let store = &mut s.passwords;
+    let Some(i) = store
+        .save_prompts
+        .iter()
+        .position(|p| p.id == id && matches!(p.kind, PromptKind::Checking))
+    else {
+        return; // answered, expired or replaced meanwhile
+    };
+    match differs {
+        Ok(true) => {
+            store.save_prompts[i].kind = PromptKind::Update(login);
+            if let Some(win) = s.tabs.get(&s.passwords.save_prompts[i].tab).map(|t| t.win) {
+                s.mark_dirty(win);
+            }
+        }
+        Ok(false) => {
+            tracing::debug!("login capture: password unchanged");
+            store.save_prompts.remove(i);
+        }
+        Err(e) => {
+            tracing::debug!("login capture: could not compare passwords: {e}");
+            store.save_prompts.remove(i);
+        }
+    }
 }
 
 /// The prompt to show in the UI strip for `tab` (no password).
 pub fn prompt_json(s: &State, tab: Option<TabId>) -> Value {
     let Some(tab) = tab else { return Value::Null };
-    s.passwords
-        .save_prompts
-        .iter()
-        .find(|p| p.tab == tab)
-        .map_or(
-            Value::Null,
-            |p| json!({ "id": p.id, "site": p.site, "username": p.username }),
-        )
+    let Some(p) = s.passwords.save_prompts.iter().find(|p| p.tab == tab) else {
+        return Value::Null;
+    };
+    let kind = match p.kind {
+        PromptKind::Save => "save",
+        PromptKind::Update(_) => "update",
+        PromptKind::Blocked => "blocked",
+        PromptKind::Checking => return Value::Null,
+    };
+    // The stored login's spelling of the name, not what was typed.
+    let username = match &p.kind {
+        PromptKind::Update(l) => &l.username,
+        _ => &p.username,
+    };
+    json!({ "id": p.id, "kind": kind, "site": p.site, "username": username })
 }
 
 pub fn tab_closed(s: &mut State, tab: TabId) {
     s.passwords.save_prompts.retain(|p| p.tab != tab);
 }
 
-/// The user answered a prompt from window `win`: `save`, `never` or `dismiss`.
+/// The user answered a prompt from window `win`: `save`, `never` or `dismiss`
+/// for a save prompt, `update` or `dismiss` for an update prompt, `dismiss`
+/// for the "cannot copy" notice.
 pub fn save_answer(s: &mut State, win: WinId, id: &str, action: &str) -> anyhow::Result<()> {
     let Some(i) = s
         .passwords
@@ -948,6 +1040,15 @@ pub fn save_answer(s: &mut State, win: WinId, id: &str, action: &str) -> anyhow:
     else {
         return Ok(()); // expired or not ours
     };
+    let allowed: &[&str] = match s.passwords.save_prompts[i].kind {
+        PromptKind::Save => &["save", "never", "dismiss"],
+        PromptKind::Update(_) => &["update", "dismiss"],
+        PromptKind::Blocked => &["dismiss"],
+        PromptKind::Checking => return Ok(()), // not shown yet
+    };
+    if !allowed.contains(&action) {
+        anyhow::bail!("unknown action");
+    }
     // The prompt (and its password) is dropped on every answer.
     let prompt = s.passwords.save_prompts.remove(i);
     s.mark_dirty(win);
@@ -969,7 +1070,12 @@ pub fn save_answer(s: &mut State, win: WinId, id: &str, action: &str) -> anyhow:
             );
         }
         "save" => start_save(s, win, prompt),
-        _ => anyhow::bail!("unknown action"),
+        "update" => {
+            if let PromptKind::Update(login) = prompt.kind {
+                start_update(s, win, prompt.tab, login, prompt.password);
+            }
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -1038,6 +1144,149 @@ fn finish_save(s: &mut State, win: WinId, result: Result<(), String>) {
         Err(e) => {
             tracing::warn!("Proton Pass: saving a login failed: {e}");
             toast(s, win, "Proton Pass: could not save the login");
+        }
+    }
+}
+
+/// How replacing a login ended.
+enum Replaced {
+    Done,
+    /// The new item exists but the old one could not be moved to the trash.
+    OldKept,
+    /// The item has data the template cannot carry: nothing was changed.
+    Uncopyable,
+}
+
+fn start_update(s: &mut State, win: WinId, tab: TabId, login: Login, password: String) {
+    if !s.settings.proton_pass
+        || !passcli::valid_id(&login.share_id)
+        || !passcli::valid_id(&login.item_id)
+    {
+        return;
+    }
+    let Some(cli) = resolve_cli(&s.settings.proton_pass_cli) else {
+        toast(s, win, "pass-cli not found");
+        return;
+    };
+    std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(|| replace_login(&cli, &login, &password))
+            .unwrap_or_else(|_| Err("internal error".into()));
+        drop(password);
+        engine::post_ui(move || {
+            super::with_state(|s| finish_update(s, win, tab, login, result));
+        });
+    });
+}
+
+/// `item update` takes values in argv (visible in /proc), so the login is
+/// recreated instead: read the item, create a copy with the new password
+/// through stdin, and only after that move the old item to the trash (never
+/// deleted). The item id changes.
+fn replace_login(cli: &PathBuf, login: &Login, password: &str) -> Result<Replaced, String> {
+    let redact = |e: String| e.replace(password, "***");
+    let raw = run_cli(
+        cli,
+        &[
+            "item",
+            "view",
+            "--share-id",
+            &login.share_id,
+            "--item-id",
+            &login.item_id,
+            "--output",
+            "json",
+        ],
+    )
+    .map_err(redact)?;
+    // The raw output holds secrets: parse, then drop it at once.
+    let plan = passcli::plan_replacement(&raw, &login.share_id, &login.item_id);
+    drop(raw);
+    let copy = match plan {
+        Some(passcli::Replacement::Copy(c)) => c,
+        Some(passcli::Replacement::Uncopyable) => return Ok(Replaced::Uncopyable),
+        None => return Err("cannot read the item".into()),
+    };
+    let template = copy.template(password);
+    let mut args = vec![
+        "item",
+        "create",
+        "login",
+        "--share-id",
+        &login.share_id,
+        "--from-template",
+        "-",
+    ];
+    if let Some(folder) = copy.folder_id() {
+        args.extend(["--folder-id", folder]);
+    }
+    run_cli_with_stdin(cli, &args, Some(template.into_bytes())).map_err(redact)?;
+    let trashed = run_cli(
+        cli,
+        &[
+            "item",
+            "trash",
+            "--share-id",
+            &login.share_id,
+            "--item-id",
+            &login.item_id,
+        ],
+    );
+    Ok(match trashed {
+        Ok(_) => Replaced::Done,
+        Err(e) => {
+            tracing::warn!("Proton Pass: could not trash the old item: {}", redact(e));
+            Replaced::OldKept
+        }
+    })
+}
+
+fn finish_update(
+    s: &mut State,
+    win: WinId,
+    tab: TabId,
+    login: Login,
+    result: Result<Replaced, String>,
+) {
+    match result {
+        Ok(Replaced::Done | Replaced::OldKept) => {
+            let kept = matches!(result, Ok(Replaced::OldKept));
+            toast(
+                s,
+                win,
+                if kept {
+                    "Password updated in Proton Pass (the old entry could not be moved to the trash)"
+                } else {
+                    "Password updated in Proton Pass"
+                },
+            );
+            // The item id changed: reload the cache.
+            s.passwords.generation += 1;
+            s.passwords.refreshing = false;
+            refresh(s, true);
+        }
+        Ok(Replaced::Uncopyable) => {
+            if s.tabs.get(&tab).map(|t| t.win) != Some(win) {
+                return;
+            }
+            let store = &mut s.passwords;
+            store.save_prompts.retain(|x| x.tab != tab);
+            store.prompt_seq += 1;
+            let id = random_id(store.prompt_seq);
+            store.save_prompts.push(SavePrompt {
+                kind: PromptKind::Blocked,
+                id: id.clone(),
+                tab,
+                site: String::new(),
+                origin: String::new(),
+                username: login.username,
+                password: String::new(),
+            });
+            expire_prompt(id);
+            s.mark_dirty(win);
+        }
+        Err(e) => {
+            tracing::warn!("Proton Pass: updating a login failed: {e}");
+            toast(s, win, "Proton Pass: could not update the password");
         }
     }
 }

@@ -234,15 +234,26 @@ function renderPrompts() {
     const text = el("div", "grow what");
     const icon = el("span"); icon.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="2.6" fill="none" stroke="currentColor"/><path d="M8.1 8H14M12 8v2.5M14 8v1.5"/></svg>';
     const words = el("span");
-    words.append("Save password for ", el("b", null, ps.site), " to Proton Pass?");
-    if (ps.username) words.append(" ", el("span", "muted", "(" + ps.username + ")"));
-    text.append(icon, words);
     const answer = action => () => api("pass_save_answer", { id: ps.id, action });
-    const save = el("button", "pbtn primary", "Save");
-    const never = el("button", "pbtn", "Never for this site");
-    const later = el("button", "pbtn", "Not now");
-    save.onclick = answer("save"); never.onclick = answer("never"); later.onclick = answer("dismiss");
-    row.append(text, never, later, save);
+    const btn = (label, action, primary) => {
+      const b = el("button", primary ? "pbtn primary" : "pbtn", label);
+      b.onclick = answer(action);
+      return b;
+    };
+    let buttons;
+    if (ps.kind === "update") {
+      words.append("Update password for ", el("b", null, ps.username), " on ", el("b", null, ps.site), " in Proton Pass?");
+      buttons = [btn("Not now", "dismiss"), btn("Update", "update", true)];
+    } else if (ps.kind === "blocked") {
+      words.append("This login has data Ferrite can't copy (a note, attachments or passkeys). Update it in the Proton Pass app.");
+      buttons = [btn("OK", "dismiss", true)];
+    } else {
+      words.append("Save password for ", el("b", null, ps.site), " to Proton Pass?");
+      if (ps.username) words.append(" ", el("span", "muted", "(" + ps.username + ")"));
+      buttons = [btn("Never for this site", "never"), btn("Not now", "dismiss"), btn("Save", "save", true)];
+    }
+    text.append(icon, words);
+    row.append(text, ...buttons);
     box.append(row);
   }
 }

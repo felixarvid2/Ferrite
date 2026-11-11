@@ -236,11 +236,222 @@ pub fn login_template(title: &str, username: &str, password: &str, urls: &[Strin
     .to_string()
 }
 
-/// Is there a cached login for `page_url` with this username (case-insensitive)?
-pub fn has_login_for(logins: &[Login], page_url: &str, username: &str) -> bool {
+/// The cached login for `page_url` with this username (case-insensitive).
+pub fn existing_login<'a>(
+    logins: &'a [Login],
+    page_url: &str,
+    username: &str,
+) -> Option<&'a Login> {
     logins
         .iter()
-        .any(|l| matches(l, page_url) && l.username.eq_ignore_ascii_case(username))
+        .find(|l| matches(l, page_url) && l.username.eq_ignore_ascii_case(username))
+}
+
+/// Is there a cached login for `page_url` with this username (case-insensitive)?
+pub fn has_login_for(logins: &[Login], page_url: &str, username: &str) -> bool {
+    existing_login(logins, page_url, username).is_some()
+}
+
+// ---------------------------------------------------------------- replacing
+
+/// Everything of a login item that `item create login --from-template` can
+/// carry, read from `item view --output json`. Holds secrets (the TOTP seed),
+/// so it has no `Debug`; the old password is deliberately not read.
+#[derive(Clone)]
+pub struct LoginCopy {
+    title: String,
+    username: Option<String>,
+    email: Option<String>,
+    totp_uri: Option<String>,
+    urls: Vec<String>,
+    /// `(kind, title, value)`, kind is `text`, `hidden` or `totp`.
+    extra_fields: Vec<(&'static str, String, String)>,
+    folder_id: Option<String>,
+}
+
+pub enum Replacement {
+    /// The item can be recreated without losing data.
+    Copy(LoginCopy),
+    /// The item has data the template cannot carry (note, attachments,
+    /// passkeys, custom sections, other field kinds): do not touch it.
+    Uncopyable,
+}
+
+impl LoginCopy {
+    /// Folder of the original item (for `--folder-id`), if it had one.
+    pub fn folder_id(&self) -> Option<&str> {
+        self.folder_id.as_deref()
+    }
+
+    /// Template JSON (one line, for stdin) with `password` in place of the old one.
+    pub fn template(&self, password: &str) -> String {
+        let extra: Vec<Value> = self
+            .extra_fields
+            .iter()
+            .map(|(kind, title, value)| {
+                serde_json::json!({ "kind": kind, "title": title, "value": value })
+            })
+            .collect();
+        serde_json::json!({
+            "title": self.title,
+            "username": self.username,
+            "email": self.email,
+            "password": password,
+            "totp_uri": self.totp_uri,
+            "urls": self.urls,
+            "extra_fields": extra,
+        })
+        .to_string()
+    }
+}
+
+fn filled(v: &Value) -> bool {
+    match v {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        Value::String(s) => !s.trim().is_empty(),
+        Value::Array(a) => !a.is_empty(),
+        Value::Object(o) => !o.is_empty(),
+        Value::Number(_) => true,
+    }
+}
+
+fn opt_string(m: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
+    non_empty_str(m, key).map(str::to_string)
+}
+
+/// One extra field in either known shape: `{"name", "content": {"Hidden": v}}`
+/// or `{"name", "kind": "hidden", "value": v}`. `Err(())` = a kind the
+/// template cannot carry (or an unreadable field). `Ok(None)` = empty TOTP.
+#[allow(clippy::type_complexity)]
+fn extra_field(f: &Value) -> Result<Option<(&'static str, String, String)>, ()> {
+    let m = f.as_object().ok_or(())?;
+    let title = ["name", "title", "field_name", "label"]
+        .iter()
+        .find_map(|k| m.get(*k).and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_string();
+    let (kind, value) = if let Some(c) = m.get("content").and_then(Value::as_object) {
+        let mut it = c.iter();
+        match (it.next(), it.next()) {
+            (Some((k, v)), None) => (k.to_ascii_lowercase(), v.as_str().ok_or(())?.to_string()),
+            _ => return Err(()),
+        }
+    } else {
+        let k = ["kind", "type"]
+            .iter()
+            .find_map(|k| m.get(*k).and_then(Value::as_str))
+            .ok_or(())?;
+        let v = m.get("value").map_or(Some(""), Value::as_str).ok_or(())?;
+        (k.to_ascii_lowercase(), v.to_string())
+    };
+    let kind = match kind.as_str() {
+        "text" => "text",
+        "hidden" => "hidden",
+        "totp" if value.trim().is_empty() => return Ok(None),
+        "totp" => "totp",
+        _ => return Err(()),
+    };
+    Ok(Some((kind, title, value)))
+}
+
+/// Read the output of `pass-cli item view --share-id S --item-id I --output
+/// json` and decide whether the login can be recreated. `None` = not
+/// readable, or not the item asked for. Both item shapes seen in
+/// [`parse_logins`] are accepted, and anything unknown that holds data counts
+/// as uncopyable (better to refuse than to lose it).
+pub fn plan_replacement(json: &str, share_id: &str, item_id: &str) -> Option<Replacement> {
+    let root: Value = serde_json::from_str(json).ok()?;
+    let item = root.get("item").filter(|i| i.is_object()).unwrap_or(&root);
+    for (key, want) in [("id", item_id), ("share_id", share_id)] {
+        if item
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|v| v != want)
+        {
+            return None;
+        }
+    }
+    let content = item.get("content")?.as_object()?;
+    let attachments = [root.get("attachments"), item.get("attachments")];
+    if attachments.iter().flatten().any(|a| filled(a)) {
+        return Some(Replacement::Uncopyable);
+    }
+    // Nested (`content.content.Login`) or flat (`content` is the login).
+    let inner = content.get("content").unwrap_or(&Value::Null);
+    let (login, nested) = match inner.get("Login") {
+        Some(l) => (l.as_object()?, true),
+        None if inner.is_null() => (content, false),
+        None => return Some(Replacement::Uncopyable), // another item type
+    };
+    const LOGIN_KEYS: [&str; 7] = [
+        "username",
+        "email",
+        "password",
+        "urls",
+        "totp_uri",
+        "passkeys",
+        "extra_fields",
+    ];
+    const CONTENT_KEYS: [&str; 5] = ["title", "note", "item_uuid", "content", "extra_fields"];
+    let note = content.get("note").or_else(|| item.get("note"));
+    let unknown_data = |m: &serde_json::Map<String, Value>, ok: &[&str], also: &[&str]| {
+        m.iter()
+            .any(|(k, v)| !ok.contains(&k.as_str()) && !also.contains(&k.as_str()) && filled(v))
+    };
+    let flat_extra: &[&str] = if nested { &[] } else { &LOGIN_KEYS };
+    if note.is_some_and(filled)
+        || unknown_data(content, &CONTENT_KEYS, flat_extra)
+        || unknown_data(login, &LOGIN_KEYS, if nested { &[] } else { &CONTENT_KEYS })
+        || login.get("passkeys").is_some_and(filled)
+    {
+        return Some(Replacement::Uncopyable);
+    }
+    let mut extra_fields = Vec::new();
+    let lists = [
+        content.get("extra_fields"),
+        nested.then(|| login.get("extra_fields")).flatten(),
+    ];
+    for list in lists.into_iter().flatten() {
+        let Some(list) = list.as_array() else {
+            return Some(Replacement::Uncopyable);
+        };
+        for f in list {
+            match extra_field(f) {
+                Ok(Some(e)) => extra_fields.push(e),
+                Ok(None) => {}
+                Err(()) => return Some(Replacement::Uncopyable),
+            }
+        }
+    }
+    let urls = login
+        .get("urls")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .map(str::to_string)
+        .collect();
+    let title = content
+        .get("title")
+        .or_else(|| item.get("title"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    Some(Replacement::Copy(LoginCopy {
+        title,
+        username: opt_string(login, "username"),
+        email: opt_string(login, "email"),
+        totp_uri: opt_string(login, "totp_uri"),
+        urls,
+        extra_fields,
+        folder_id: item
+            .get("folder_id")
+            .and_then(Value::as_str)
+            .filter(|f| valid_id(f))
+            .map(str::to_string),
+    }))
 }
 
 /// Lowercased host without a leading `www.`; the scheme defaults to https.
@@ -459,5 +670,127 @@ mod tests {
         assert!(has_login_for(&list, "https://example.com/login", "alice"));
         assert!(!has_login_for(&list, "https://example.com/", "bob"));
         assert!(!has_login_for(&list, "https://other.com/", "alice"));
+    }
+
+    fn tpl(c: &LoginCopy) -> Value {
+        serde_json::from_str(&c.template("NEW\"pw")).unwrap()
+    }
+
+    fn copy_of(j: &str) -> LoginCopy {
+        match plan_replacement(j, "S", "I") {
+            Some(Replacement::Copy(c)) => c,
+            Some(Replacement::Uncopyable) => panic!("uncopyable"),
+            None => panic!("unreadable"),
+        }
+    }
+
+    fn uncopyable(j: &str) -> bool {
+        matches!(plan_replacement(j, "S", "I"), Some(Replacement::Uncopyable))
+    }
+
+    #[test]
+    fn replacement_nested_shape() {
+        let j = r#"{"item":{"id":"I","share_id":"S","folder_id":"F1","state":"Active",
+          "content":{"title":"Example","note":"","item_uuid":"u","content":{"Login":{"email":"a@b.co","username":"alice",
+          "password":"OLD","urls":["https://example.com","https://x.org"],"totp_uri":"otpauth://totp/x?secret=ABC","passkeys":[]}},
+          "extra_fields":[{"name":"Recovery","content":{"Hidden":"rk"}},{"name":"Pin","content":{"Text":"1234"}},
+          {"name":"2FA","content":{"Totp":"otpauth://totp/y?secret=DEF"}},{"name":"empty","content":{"Totp":""}}]}},
+          "attachments":[]}"#;
+        let c = copy_of(j);
+        let t = tpl(&c);
+        assert_eq!(t["title"], "Example");
+        assert_eq!(t["username"], "alice");
+        assert_eq!(t["email"], "a@b.co");
+        assert_eq!(t["password"], "NEW\"pw");
+        assert_eq!(t["totp_uri"], "otpauth://totp/x?secret=ABC");
+        assert_eq!(
+            t["urls"],
+            serde_json::json!(["https://example.com", "https://x.org"])
+        );
+        assert_eq!(
+            t["extra_fields"],
+            serde_json::json!([
+                {"kind":"hidden","title":"Recovery","value":"rk"},
+                {"kind":"text","title":"Pin","value":"1234"},
+                {"kind":"totp","title":"2FA","value":"otpauth://totp/y?secret=DEF"}
+            ])
+        );
+        assert_eq!(c.folder_id(), Some("F1"));
+        assert!(!c.template("p").contains("OLD"), "old password not copied");
+        assert!(!c.template("p").contains('\n'));
+    }
+
+    #[test]
+    fn replacement_flat_shape_and_kind_value_fields() {
+        let j = r#"{"id":"I","share_id":"S","title":"Flat","content":{"username":"","email":"a@b.c","password":"OLD",
+          "urls":["example.org"],"totp_uri":"",
+          "extra_fields":[{"name":"t","kind":"totp","value":"otpauth://totp/z?secret=GHI"},{"name":"h","kind":"Hidden","value":"v"}]}}"#;
+        let c = copy_of(j);
+        let t = tpl(&c);
+        assert_eq!(t["title"], "Flat");
+        assert!(t["username"].is_null() && t["totp_uri"].is_null());
+        assert_eq!(t["email"], "a@b.c");
+        assert_eq!(
+            t["extra_fields"].as_array().unwrap().len(),
+            2,
+            "no duplicates"
+        );
+        assert_eq!(t["extra_fields"][0]["kind"], "totp");
+        assert_eq!(t["extra_fields"][1]["kind"], "hidden");
+        assert_eq!(c.folder_id(), None);
+    }
+
+    #[test]
+    fn replacement_detects_uncopyable_data() {
+        let base = |login: &str, content_extra: &str, item_extra: &str| {
+            format!(
+                r#"{{"item":{{"id":"I","share_id":"S"{item_extra},"content":{{"title":"t","note":"" {content_extra},
+                "content":{{"Login":{login}}}}}}}}}"#
+            )
+        };
+        let ok = r#"{"username":"u","password":"p","urls":["https://a.com"],"totp_uri":null,"passkeys":[]}"#;
+        assert!(!uncopyable(&base(ok, "", "")));
+        // A note (the template has no note field).
+        assert!(uncopyable(
+            &base(ok, "", "").replace(r#""note":"""#, r#""note":"keep me""#)
+        ));
+        // Attachments, at the root or in the item.
+        assert!(uncopyable(&format!(
+            r#"{{"attachments":[{{"id":"a"}}],{}"#,
+            &base(ok, "", "")[1..]
+        )));
+        assert!(uncopyable(&base(ok, "", r#","attachments":[{"id":"a"}]"#)));
+        // Passkeys.
+        let pk = r#"{"username":"u","password":"p","urls":["https://a.com"],"passkeys":[{"key_id":"k"}]}"#;
+        assert!(uncopyable(&base(pk, "", "")));
+        // Custom sections / unknown content.
+        assert!(uncopyable(&base(
+            ok,
+            r#","sections":[{"title":"s","fields":[]}]"#,
+            ""
+        )));
+        let unk = r#"{"username":"u","urls":["https://a.com"],"something_new":"x"}"#;
+        assert!(uncopyable(&base(unk, "", "")));
+        // Field kinds the template rejects.
+        assert!(uncopyable(&base(
+            ok,
+            r#","extra_fields":[{"name":"d","content":{"Timestamp":"1"}}]"#,
+            ""
+        )));
+        // Not a login.
+        assert!(uncopyable(
+            r#"{"item":{"id":"I","share_id":"S","content":{"title":"n","content":{"Note":{}}}}}"#
+        ));
+        // Empty values of unknown keys are harmless.
+        let empty = r#"{"username":"u","urls":["https://a.com"],"something_new":"","other":[]}"#;
+        assert!(!uncopyable(&base(empty, "", "")));
+    }
+
+    #[test]
+    fn replacement_rejects_wrong_or_broken_item() {
+        let j = r#"{"item":{"id":"OTHER","share_id":"S","content":{"title":"t","content":{"Login":{"urls":["https://a.com"]}}}}}"#;
+        assert!(plan_replacement(j, "S", "I").is_none());
+        assert!(plan_replacement("garbage", "S", "I").is_none());
+        assert!(plan_replacement("{}", "S", "I").is_none());
     }
 }
