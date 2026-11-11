@@ -157,8 +157,12 @@ Network traffic went through an HTTPS-intercepting proxy.
   (`canPlayType` returns "" for `avc1` and `mp4a`). Sites that serve only H.264
   (some news video players, X/Twitter video, some streaming) will not play.
   YouTube normally serves VP9 or AV1 with Opus, so it should play.
-  Fixing this needs a CEF build with `proprietary_codecs=true
-  ffmpeg_branding=Chrome`, which has license implications.
+  `scripts/build-cef-codecs.sh` builds the pinned CEF with
+  `proprietary_codecs=true ffmpeg_branding=Chrome` on your machine (about
+  120 GB of disk and hours of build time; not run in the dev container) and
+  installs it for `CEF_PATH`. See docs/CODECS.md for the steps, the one
+  third-party prebuilt found and the licensing issues. `ferrite://about/`
+  shows which codecs a build supports.
 - No Widevine DRM. Netflix, the Spotify web player and Disney+ will not play.
 
 ### Not implemented
