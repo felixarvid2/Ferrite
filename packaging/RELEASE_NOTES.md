@@ -16,8 +16,14 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   permissions, session restore, tab sleeping.
 - Ad and tracker blocking with EasyList, EasyPrivacy and uBlock Origin's
   lists and scriptlets, including YouTube ad blocking. On by default.
-- Proton Pass: fill logins through Proton's `pass-cli`
-  (Settings > Passwords; run `pass-cli login` once).
+- Proton Pass through Proton's `pass-cli` (Settings > Passwords; run
+  `pass-cli login` once): fill logins, save new ones, update changed
+  passwords, fill 2FA (TOTP) codes.
+- Import bookmarks and history from Chrome, Chromium, Brave, Edge, Vivaldi
+  and Firefox (Settings > Import).
+- Shield button: blocked-request count and "turn off blocking on this site".
+- Update check: "Update available" in the menu and on ferrite://about/
+  (once a day, can be turned off).
 - Widevine DRM (downloaded by Chromium on first run, active after a restart).
 
 ## Known limitations
@@ -28,4 +34,4 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   not against the real services.
 - See `browser/docs/STATUS.md` for everything verified and not verified.
 
-This is an early release (0.1.1: new app icon).
+This is an early release (0.2.0).
