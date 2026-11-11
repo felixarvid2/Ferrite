@@ -31,7 +31,8 @@ Network traffic went through an HTTPS-intercepting proxy.
   downloaded (2.0 MB + 1.5 MB) and the engine loaded; on cnn.com ad and tracking
   requests were cancelled (Adobe Launch, Optimizely, Google IMA SDK, tracking
   pings) while the page loaded normally.
-- Not yet: per-site "disable blocking on this site", procedural cosmetic filters
+- Per-site off switch: shield button in the address bar (blocked-request count badge, menu "Turn off blocking on this site"); sites are stored in `adblock_exceptions` (listed in Settings) and skip network blocking and scriptlet/CSS injection, subdomains included. The counter resets on each main-frame navigation.
+- Not yet: procedural cosmetic filters
   (`:has-text()` etc.), generic class/id hiding, a blocked-request counter in the
   toolbar.
 
@@ -313,7 +314,7 @@ For headless testing:
 
 In priority order:
 
-1. Per-site "disable blocking on this site", procedural and generic cosmetic filtering.
+1. Procedural and generic cosmetic filtering.
 2. Password manager on the OS secret store (Secret Service through `keyring`).
    No homemade cryptography.
 3. Overlay suggestions dropdown (CEF overlay view) and a download shelf.

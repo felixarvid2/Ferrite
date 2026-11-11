@@ -82,6 +82,16 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
     } else {
         Value::Null
     };
+    let blocking = active.map(|t| {
+        let site = ferrite_core::blocker::site_key(&t.url);
+        let excepted = ferrite_core::blocker::is_exception(&s.settings.adblock_exceptions, &t.url);
+        json!({
+            "global": s.settings.adblock_enabled,
+            "enabled": s.settings.adblock_enabled && site.is_some() && !excepted,
+            "count": t.browser.as_ref().map_or(0, |b| super::handlers::blocked_count(b.identifier())),
+            "site": site,
+        })
+    });
     let prompts: Vec<Value> = w
         .prompts
         .iter()
@@ -97,6 +107,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "nav": nav,
         "bookmarks_bar": bookmarks_bar,
         "prompts": prompts,
+        "blocking": blocking,
         "downloads": { "active": s.downloads.active_count(), "progress": s.downloads.progress() },
         "closed_tabs": w.closed_tabs.len(),
         "frameless": !s.settings.system_titlebar,
@@ -117,6 +128,7 @@ const UI_ONLY: &[&str] = &[
     "pin_tab",
     "permission",
     "password_menu",
+    "blocking_menu",
 ];
 
 /// Reject tab ids that belong to another window (or to no tab at all).
@@ -285,6 +297,15 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             passwords::tick(s);
             Value::Null
         }
+        "blocking_menu" => {
+            menu::show_blocking_menu(
+                s,
+                win,
+                arg_i64(&args, "x")? as i32,
+                arg_i64(&args, "y")? as i32,
+            );
+            Value::Null
+        }
         "pass_status" => passwords::status_json(s),
         "pass_refresh" => {
             passwords::refresh(s, true);
@@ -432,6 +453,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         }),
         "settings_set" => {
             let before_theme = s.settings.theme;
+            let before_exceptions = s.settings.adblock_exceptions.clone();
             let (was_pass, old_cli) = (s.settings.proton_pass, s.settings.proton_pass_cli.clone());
             s.settings
                 .apply_patch(args.get("patch").unwrap_or(&Value::Null))?;
@@ -455,6 +477,9 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                     .map(|b| (b.identifier(), b))
                     .collect();
                 super::inject::clear_all(|id| browsers.get(&id).cloned());
+            }
+            if s.settings.adblock_exceptions != before_exceptions {
+                super::handlers::apply_exceptions(s);
             }
             if s.settings.theme != before_theme {
                 super::theme::apply_to_context(s, None);

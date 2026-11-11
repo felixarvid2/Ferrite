@@ -176,3 +176,74 @@ wrap_menu_model_delegate! {
         }
     }
 }
+
+/// Per-site ad blocking menu (shield button): a disabled count line and the
+/// switch for the active tab's site.
+pub fn show_blocking_menu(s: &super::State, win: WinId, x: i32, y: i32) {
+    let Some(w) = s.windows.get(&win) else { return };
+    let Some(window) = w.window.clone() else {
+        return;
+    };
+    let Some(tab) = w.active else { return };
+    let Some(t) = s.tabs.get(&tab) else { return };
+    let Some(site) = ferrite_core::blocker::site_key(&t.url) else {
+        return;
+    };
+    let off = ferrite_core::blocker::is_exception(&s.settings.adblock_exceptions, &t.url);
+    let count = t
+        .browser
+        .as_ref()
+        .map_or(0, |b| super::handlers::blocked_count(b.identifier()));
+    let mut delegate = BlockingMenuDelegate::new(win, tab, site.clone());
+    let Some(mut model) = menu_model_create(Some(&mut delegate)) else {
+        return;
+    };
+    model.add_item(201, Some(&cef_str(&format!("{count} blocked on {site}"))));
+    model.set_enabled(201, 0);
+    model.add_separator();
+    let label = if off {
+        "Turn on blocking on this site"
+    } else {
+        "Turn off blocking on this site"
+    };
+    model.add_item(202, Some(&cef_str(label)));
+    let mut point = Point { x, y };
+    w.ui_view.convert_point_to_screen(Some(&mut point));
+    window.show_menu(Some(&mut model), Some(&point), MenuAnchorPosition::TOPRIGHT);
+}
+
+/// Switch blocking off/on for `site`, save, and reload the tab.
+fn toggle_site_blocking(s: &mut super::State, tab: super::TabId, site: &str) {
+    let list = &mut s.settings.adblock_exceptions;
+    if let Some(i) = list.iter().position(|e| e == site) {
+        list.remove(i);
+    } else {
+        list.push(site.to_string());
+        list.sort();
+    }
+    s.save_settings();
+    super::handlers::apply_exceptions(s);
+    if let Some(b) = s.tabs.get(&tab).and_then(|t| t.browser.clone()) {
+        b.reload();
+    }
+    s.mark_all_dirty();
+}
+
+wrap_menu_model_delegate! {
+    struct BlockingMenuDelegate {
+        win: WinId,
+        tab: super::TabId,
+        site: String,
+    }
+
+    impl MenuModelDelegate {
+        fn execute_command(&self, _menu_model: Option<&mut MenuModel>, command_id: ::std::os::raw::c_int, _event_flags: EventFlags) {
+            if command_id != 202 {
+                return;
+            }
+            let (tab, site) = (self.tab, self.site.clone());
+            let _ = self.win;
+            later(move |s| toggle_site_blocking(s, tab, &site));
+        }
+    }
+}

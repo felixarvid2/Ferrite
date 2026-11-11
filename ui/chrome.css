@@ -119,6 +119,13 @@ button { cursor: default; }
 #zoom:hover { background: var(--press); }
 #star.on { color: var(--warn); }
 #star.on svg { fill: currentColor; }
+#shield { position: relative; color: var(--accent); }
+#shield svg { fill: none; }
+#shield .slash { display: none; }
+#shield.off { color: var(--ink-3); opacity: .75; }
+#shield.off .slash { display: inline; }
+#shield-badge { position: absolute; right: -2px; top: -2px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px;
+  background: var(--accent); color: var(--accent-ink); font-size: 9px; font-weight: 600; line-height: 14px; text-align: center; pointer-events: none; }
 #dl-badge { position: absolute; right: -1px; bottom: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   background: var(--accent); color: var(--accent-ink); font-size: 9.5px; font-weight: 600; line-height: 16px; text-align: center; }
 #progress { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accent);

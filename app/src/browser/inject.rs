@@ -209,11 +209,11 @@ pub fn navigation(
 }
 
 /// The script for a page at `url`: uBlock Origin scriptlets plus element
-/// hiding CSS from the content blocker (None when blocking is off, the
+/// hiding CSS from the content blocker (None when blocking is off or the site is an exception, the
 /// filter lists are not loaded yet, or nothing applies).
 pub fn blocking_script(url: &str) -> Option<String> {
     use super::handlers::{ADBLOCK, BLOCKER};
-    if !ADBLOCK.load(std::sync::atomic::Ordering::Relaxed) {
+    if !ADBLOCK.load(std::sync::atomic::Ordering::Relaxed) || super::handlers::is_excepted(url) {
         return None;
     }
     let blocker = BLOCKER.read().ok().and_then(|b| b.clone())?;

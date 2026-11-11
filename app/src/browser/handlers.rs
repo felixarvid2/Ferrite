@@ -15,6 +15,83 @@ pub static ADBLOCK: AtomicBool = AtomicBool::new(false);
 pub static BLOCKER: std::sync::RwLock<Option<std::sync::Arc<ferrite_core::blocker::Blocker>>> =
     std::sync::RwLock::new(None);
 
+/// Sites where ad blocking is off (see `Settings::adblock_exceptions`).
+/// Replaced as a whole whenever the setting changes; the IO thread clones the Arc.
+static EXCEPTIONS: std::sync::RwLock<Option<std::sync::Arc<Vec<String>>>> =
+    std::sync::RwLock::new(None);
+/// Requests cancelled by the blocker since the last main-frame navigation, per browser.
+static BLOCKED: std::sync::Mutex<Option<std::collections::HashMap<i32, u32>>> =
+    std::sync::Mutex::new(None);
+/// A delayed UI refresh for the blocked-count badge is already queued.
+static BADGE_PENDING: AtomicBool = AtomicBool::new(false);
+
+pub fn set_exceptions(list: Vec<String>) {
+    if let Ok(mut slot) = EXCEPTIONS.write() {
+        *slot = Some(std::sync::Arc::new(list));
+    }
+}
+
+/// Is blocking switched off for the site of `url`? (any thread)
+pub fn is_excepted(url: &str) -> bool {
+    let list = EXCEPTIONS.read().ok().and_then(|l| l.clone());
+    list.is_some_and(|l| ferrite_core::blocker::is_exception(&l, url))
+}
+
+/// Requests blocked on the browser's current page. Never blocks: if the
+/// lock is busy (IO thread counting) it reports 0 and the next refresh fixes it.
+pub fn blocked_count(browser_id: i32) -> u32 {
+    BLOCKED
+        .try_lock()
+        .ok()
+        .and_then(|g| g.as_ref().and_then(|m| m.get(&browser_id).copied()))
+        .unwrap_or(0)
+}
+
+fn reset_blocked(browser_id: i32) {
+    let had = BLOCKED.lock().ok().is_some_and(|mut g| {
+        g.as_mut()
+            .and_then(|m| m.remove(&browser_id))
+            .is_some_and(|n| n > 0)
+    });
+    if had {
+        later(move |s| {
+            if let Some(win) = s.win_of_browser(browser_id) {
+                s.mark_dirty(win);
+            }
+        });
+    }
+}
+
+/// IO thread: one more request cancelled. Refreshes the UI at most every 250 ms.
+fn count_blocked(browser_id: i32) {
+    if let Ok(mut g) = BLOCKED.lock() {
+        let n = g
+            .get_or_insert_with(Default::default)
+            .entry(browser_id)
+            .or_insert(0);
+        *n = n.saturating_add(1);
+    }
+    if !BADGE_PENDING.swap(true, Ordering::Relaxed) {
+        crate::engine::post_ui_delayed(250, move || {
+            BADGE_PENDING.store(false, Ordering::Relaxed);
+            later(|s| s.mark_all_dirty());
+        });
+    }
+}
+
+/// The exception list changed: publish it and drop the injected scripts of
+/// every tab (they are registered again, or not, on the next navigation).
+pub fn apply_exceptions(s: &State) {
+    set_exceptions(s.settings.adblock_exceptions.clone());
+    let browsers: std::collections::HashMap<i32, Browser> = s
+        .tabs
+        .values()
+        .filter_map(|t| t.browser.clone())
+        .map(|b| (b.identifier(), b))
+        .collect();
+    super::inject::clear_all(|id| browsers.get(&id).cloned());
+}
+
 /// uBlock Origin's scriptlets (GPL-3.0 data file, see resources/adblock/):
 /// next to the executable in a bundle, else in the source tree (dev builds).
 pub fn scriptlets_path() -> Option<std::path::PathBuf> {
@@ -317,6 +394,11 @@ wrap_life_span_handler! {
         fn on_before_close(&self, browser: Option<&mut Browser>) {
             let browser_id = id_of(&browser);
             super::inject::closed(browser_id);
+            if let Ok(mut g) = BLOCKED.lock() {
+                if let Some(m) = g.as_mut() {
+                    m.remove(&browser_id);
+                }
+            }
             later(move |s| {
                 if let Some(BrowserRef::Tab(tab)) = s.browsers.remove(&browser_id) {
                     if s.tabs.get(&tab).is_some_and(|t| t.discarding) {
@@ -453,6 +535,7 @@ wrap_request_handler! {
                 return 1;
             }
             if let (true, Some(browser)) = (is_main, browser) {
+                reset_blocked(browser.identifier());
                 super::inject::navigation(browser, &target, super::inject::blocking_script);
             }
             0
@@ -669,6 +752,7 @@ wrap_resource_request_handler! {
                 let kind = adblock_type(request.resource_type());
                 if kind != "document" {
                     let url = from_userfree(&request.url());
+                    let browser_id = browser.as_ref().map(|b| b.identifier());
                     // First party = the tab's top-level page.
                     let source = browser
                         .and_then(|b| b.main_frame())
@@ -676,8 +760,14 @@ wrap_resource_request_handler! {
                         .unwrap_or_default();
                     let blocker = BLOCKER.read().ok().and_then(|b| b.clone());
                     if let Some(blocker) = blocker {
-                        if url.starts_with("http") && blocker.should_block(&url, &source, kind) {
+                        if url.starts_with("http")
+                            && !is_excepted(&source)
+                            && blocker.should_block(&url, &source, kind)
+                        {
                             tracing::trace!("blocked {kind} {url}");
+                            if let Some(id) = browser_id {
+                                count_blocked(id);
+                            }
                             return ReturnValue::CANCEL;
                         }
                     }

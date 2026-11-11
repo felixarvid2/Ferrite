@@ -34,6 +34,8 @@ pub struct Settings {
     pub show_bookmarks_bar: bool,
     pub tracking_protection: bool,
     pub adblock_enabled: bool,
+    /// Sites (lowercase hosts, no "www.") where ad blocking is switched off.
+    pub adblock_exceptions: Vec<String>,
     pub send_do_not_track: bool,
     pub restore_after_crash: bool,
     pub default_zoom_percent: u32,
@@ -65,6 +67,7 @@ impl Default for Settings {
             show_bookmarks_bar: true,
             tracking_protection: false,
             adblock_enabled: true,
+            adblock_exceptions: Vec::new(),
             send_do_not_track: false,
             restore_after_crash: true,
             default_zoom_percent: 100,
@@ -108,6 +111,15 @@ impl Settings {
             obj.insert(k.clone(), v.clone());
         }
         *self = serde_json::from_value(current).context("invalid settings patch")?;
+        // Exceptions are site keys: normalise, drop invalid, sort, dedupe.
+        let mut sites: Vec<String> = self
+            .adblock_exceptions
+            .iter()
+            .filter_map(|s| crate::blocker::normalize_site(s))
+            .collect();
+        sites.sort();
+        sites.dedup();
+        self.adblock_exceptions = sites;
         Ok(())
     }
 }
@@ -176,5 +188,17 @@ mod tests {
             .is_err());
         assert!(s.apply_patch(&json!([1, 2])).is_err());
         assert_eq!(s, before);
+    }
+
+    #[test]
+    fn adblock_exceptions_normalised_and_defaulted() {
+        let mut s = Settings::default();
+        assert!(s.adblock_exceptions.is_empty());
+        s.apply_patch(&json!({"adblock_exceptions":["WWW.B.com","a.com","b.com","ferrite://x"]}))
+            .unwrap();
+        assert_eq!(s.adblock_exceptions, vec!["a.com", "b.com"]);
+        // Old files without the field still load.
+        let old: Settings = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
+        assert!(old.adblock_exceptions.is_empty());
     }
 }

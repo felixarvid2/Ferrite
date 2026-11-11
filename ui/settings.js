@@ -9,10 +9,22 @@ async function load() {
     const v = settings[input.dataset.key];
     if (input.type === "checkbox") input.checked = !!v; else input.value = String(v);
   }
+  renderExceptions();
   loadPerms();
   loadPass();
   const a = await api("about");
   document.getElementById("about").textContent = `Ferrite ${a.ferrite} · Chromium ${a.chromium} · CEF ${a.cef}` + (a.sandbox ? "" : " · sandbox disabled");
+}
+function renderExceptions() {
+  const box = document.getElementById("adblock-sites");
+  const sites = settings.adblock_exceptions || [];
+  box.replaceChildren(...(sites.length ? [el("div", { class: "row" }, el("div", { class: "grow" }, el("div", { text: "Sites where blocking is off" }), el("div", { class: "desc", text: "Ads and trackers are allowed on these sites and their subdomains." })))] : []),
+    ...sites.map(site => el("div", { class: "row hoverable" },
+      el("div", { class: "grow" }, el("div", { class: "title", text: site })),
+      el("button", { class: "icon-btn danger", title: "Turn blocking back on", "aria-label": "Remove " + site, onclick: async () => {
+        settings = await api("settings_set", { patch: { adblock_exceptions: sites.filter(x => x !== site) } });
+        renderExceptions();
+      } }, icon("close")))));
 }
 async function loadPerms() {
   const perms = await api("permissions_list");

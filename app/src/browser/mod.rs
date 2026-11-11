@@ -258,6 +258,9 @@ pub fn start() {
     };
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
 
+    if let Some(list) = with_state(|s| s.settings.adblock_exceptions.clone()) {
+        handlers::set_exceptions(list);
+    }
     handlers::SEND_DNT.store(state_dnt(), std::sync::atomic::Ordering::Relaxed);
     if with_state(|s| s.settings.adblock_enabled).unwrap_or(false) {
         handlers::ADBLOCK.store(true, std::sync::atomic::Ordering::Relaxed);

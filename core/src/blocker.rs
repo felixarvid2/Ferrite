@@ -217,6 +217,46 @@ pub fn update_lists(dir: &Path) -> anyhow::Result<usize> {
     Ok(updated)
 }
 
+/// Site key of an http(s) URL for the per-site blocking exceptions: the
+/// lowercase host without a leading "www." (None for other schemes).
+pub fn site_key(url: &str) -> Option<String> {
+    let u = url::Url::parse(url).ok()?;
+    if !matches!(u.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = u.host_str()?.to_ascii_lowercase();
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    (!host.is_empty()).then(|| host.to_string())
+}
+
+/// Normalise a user-supplied exception ("WWW.Example.com", a full URL) to a
+/// site key; None if it names no host.
+pub fn normalize_site(input: &str) -> Option<String> {
+    let t = input.trim();
+    if t.contains("://") {
+        return site_key(t);
+    }
+    site_key(&format!("https://{t}")).filter(|k| !t.contains('/') || k.len() > 1)
+}
+
+/// True if `url`'s site is one of the exceptions or a subdomain of one
+/// (dot boundary: "ads.example.com" matches "example.com", "badexample.com"
+/// does not).
+pub fn is_exception(exceptions: &[String], url: &str) -> bool {
+    if exceptions.is_empty() {
+        return false;
+    }
+    let Some(key) = site_key(url) else {
+        return false;
+    };
+    exceptions.iter().any(|e| {
+        key == *e
+            || key
+                .strip_suffix(e.as_str())
+                .is_some_and(|rest| rest.ends_with('.'))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,5 +420,51 @@ mod tests {
             let size = b.cosmetic(url).map(|c| (c.script.len(), c.css.len()));
             println!("{url}: {size:?}");
         }
+    }
+
+    #[test]
+    fn site_keys() {
+        assert_eq!(
+            site_key("https://WWW.Example.com/a?b").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            site_key("http://sub.example.com:8080/").as_deref(),
+            Some("sub.example.com")
+        );
+        assert_eq!(
+            site_key("http://localhost:8769/x").as_deref(),
+            Some("localhost")
+        );
+        assert_eq!(site_key("ferrite://settings/"), None);
+        assert_eq!(site_key("file:///tmp/a.html"), None);
+        assert_eq!(site_key("about:blank"), None);
+        assert_eq!(site_key("garbage"), None);
+    }
+
+    #[test]
+    fn exceptions_match_on_dot_boundary() {
+        let ex = vec!["example.com".to_string()];
+        assert!(is_exception(&ex, "https://example.com/"));
+        assert!(is_exception(&ex, "https://www.example.com/x"));
+        assert!(is_exception(&ex, "https://a.b.example.com/"));
+        assert!(!is_exception(&ex, "https://badexample.com/"));
+        assert!(!is_exception(&ex, "https://example.com.evil.net/"));
+        assert!(!is_exception(&ex, "ferrite://example.com/"));
+        assert!(!is_exception(&[], "https://example.com/"));
+    }
+
+    #[test]
+    fn normalize_sites() {
+        assert_eq!(
+            normalize_site(" WWW.Example.com ").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(
+            normalize_site("https://www.a.org/p").as_deref(),
+            Some("a.org")
+        );
+        assert_eq!(normalize_site("ferrite://x"), None);
+        assert_eq!(normalize_site(""), None);
     }
 }
