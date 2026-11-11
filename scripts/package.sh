@@ -26,16 +26,26 @@ BUNDLE="$ROOT/dist/ferrite"
 WORK="$ROOT/dist/pkg"
 rm -rf "$WORK" && mkdir -p "$WORK"
 
-# Icons rendered from the SVG (needs rsvg-convert: apt install librsvg2-bin).
+# Icons rendered from the SVG with rsvg-convert (apt install librsvg2-bin) or
+# ImageMagick. Without either (e.g. CI runners whose apt mirror is down) the
+# pre-rendered PNGs in packaging/icons are used; scripts/render-icons.sh
+# refreshes them after ui/icon.svg changes.
 ICONS="$WORK/icons"
 mkdir -p "$ICONS"
 for size in 16 32 48 64 128 256 512; do
   if command -v rsvg-convert >/dev/null; then
     rsvg-convert -w "$size" -h "$size" ui/icon.svg -o "$ICONS/ferrite-$size.png"
-  else
+  elif command -v convert >/dev/null; then
     convert -background none -density 512 ui/icon.svg -resize "${size}x${size}" "$ICONS/ferrite-$size.png"
+  else
+    cp "packaging/icons/ferrite-$size.png" "$ICONS/"
   fi
 done
+if ! command -v rsvg-convert >/dev/null && ! command -v convert >/dev/null \
+   && [ "$(sha256sum ui/icon.svg | cut -d' ' -f1)" != "$(cat packaging/icons/icon.svg.sha256)" ]; then
+  echo "error: packaging/icons is out of date with ui/icon.svg; run scripts/render-icons.sh" >&2
+  exit 1
+fi
 
 install_icons() { # <prefix>
   for size in 16 32 48 64 128 256 512; do
