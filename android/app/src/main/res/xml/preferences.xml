@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+    <PreferenceCategory app:title="General">
+        <ListPreference
+            app:defaultValue="google"
+            app:entries="@array/engine_names"
+            app:entryValues="@array/engine_ids"
+            app:key="search_engine"
+            app:title="Search engine"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:dialogMessage="Leave empty for the new-tab page with your top sites."
+            app:key="homepage"
+            app:title="Homepage"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="Privacy and security">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="adblock"
+            app:summary="Blocks ads and trackers with EasyList, EasyPrivacy and uBlock Origin lists and scriptlets."
+            app:title="Ad blocking" />
+        <Preference
+            app:key="exceptions"
+            app:title="Sites without ad blocking" />
+        <Preference
+            app:key="lists"
+            app:title="Update filter lists" />
+        <Preference
+            app:key="permissions"
+            app:summary="Forget the location, camera and microphone choices you made for sites."
+            app:title="Reset site permissions" />
+        <Preference
+            app:key="clear"
+            app:title="Clear browsing data" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="Updates">
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="update_check"
+            app:summary="Once a day Ferrite asks api.github.com for a newer release. Nothing is installed automatically."
+            app:title="Check for updates" />
+    </PreferenceCategory>
+    <PreferenceCategory app:title="About">
+        <Preference
+            app:key="about"
+            app:title="About Ferrite" />
+    </PreferenceCategory>
+</PreferenceScreen>
