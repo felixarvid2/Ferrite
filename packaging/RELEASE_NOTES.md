@@ -28,4 +28,4 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   not against the real services.
 - See `browser/docs/STATUS.md` for everything verified and not verified.
 
-This is an early release (0.1.0).
+This is an early release (0.1.1: new app icon).
