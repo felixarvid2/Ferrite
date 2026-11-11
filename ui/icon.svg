@@ -1,1 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a9c0ff"/><stop offset="1" stop-color="#4466e6"/></linearGradient><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><rect x="3" y="3" width="58" height="58" rx="16" fill="url(#g)"/><rect x="3" y="3" width="58" height="58" rx="16" fill="url(#s)"/><path d="M22 17h22v7H30v6h12v7H30v10h-8z" fill="#0b1330"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<defs>
+<linearGradient id="t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4350dc"/><stop offset="1" stop-color="#10112e"/></linearGradient>
+<radialGradient id="h"><stop offset="0" stop-color="#8c9bff" stop-opacity=".5"/><stop offset="1" stop-color="#8c9bff" stop-opacity="0"/></radialGradient>
+<radialGradient id="a" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="29"><stop offset=".22" stop-color="#7c8cff" stop-opacity=".75"/><stop offset=".6" stop-color="#b7c1ff"/><stop offset="1" stop-color="#fff"/></radialGradient>
+<radialGradient id="b" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="29"><stop offset=".22" stop-color="#5a6bf0" stop-opacity=".75"/><stop offset=".6" stop-color="#8f9eff"/><stop offset="1" stop-color="#e6eaff"/></radialGradient>
+<linearGradient id="r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".5" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity=".14"/></linearGradient>
+<clipPath id="c"><rect x="4" y="4" width="56" height="56" rx="14"/></clipPath>
+</defs>
+<rect x="4" y="4" width="56" height="56" rx="14" fill="url(#t)"/>
+<g clip-path="url(#c)">
+<circle cx="32" cy="32" r="28" fill="url(#h)"/>
+<g transform="translate(32 32) rotate(45)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M2.8 -6.4Q7.6 -13.1 16.1 -15.7Q26.4 -18.9 34.9 -14.2Q44 -9.3 44 0Q44 9.3 34.9 14.2Q26.4 18.9 16.1 15.7Q7.6 13.1 2.8 6.4M-2.8 -6.4Q-7.6 -13.1 -16.1 -15.7Q-26.4 -18.9 -34.9 -14.2Q-44 -9.3 -44 0Q-44 9.3 -34.9 14.2Q-26.4 18.9 -16.1 15.7Q-7.6 13.1 -2.8 6.4M2.2 -6.6Q8.1 -17.8 21.3 -23.4Q38.2 -30.7 53.5 -23.7Q70 -16.1 70 0Q70 16.1 53.5 23.7Q38.2 30.7 21.3 23.4Q8.1 17.8 2.2 6.6M-2.2 -6.6Q-8.1 -17.8 -21.3 -23.4Q-38.2 -30.7 -53.5 -23.7Q-70 -16.1 -70 0Q-70 16.1 -53.5 23.7Q-38.2 30.7 -21.3 23.4Q-8.1 17.8 -2.2 6.6M1.7 -6.8Q8.9 -25.6 30.5 -37.3Q59.8 -53.1 88.6 -42Q120 -29.8 120 0Q120 29.8 88.6 42Q59.8 53.1 30.5 37.3Q8.9 25.6 1.7 6.8M-1.7 -6.8Q-8.9 -25.6 -30.5 -37.3Q-59.8 -53.1 -88.6 -42Q-120 -29.8 -120 0Q-120 29.8 -88.6 42Q-59.8 53.1 -30.5 37.3Q-8.9 25.6 -1.7 6.8M0-8V-45M0 8V45" stroke="#b4beff" stroke-opacity=".28" stroke-width=".9"/>
+<path d="M0 0Q0 -1 -0.9 -2.6Q-2.5 -5.8 -5.9 -8.1Q-10.2 -11 -15.4 -11.2Q-21 -11.3 -24.9 -8.1Q-29 -4.8 -29 0Q-29 4.8 -24.9 8.1Q-21 11.3 -15.4 11.2Q-10.2 11 -5.9 8.1Q-2.5 5.8 -0.9 2.6Q0 1 0 0z" fill="url(#a)"/>
+<path d="M0 0Q0 -1 0.9 -2.6Q2.5 -5.8 5.9 -8.1Q10.2 -11 15.4 -11.2Q21 -11.3 24.9 -8.1Q29 -4.8 29 0Q29 4.8 24.9 8.1Q21 11.3 15.4 11.2Q10.2 11 5.9 8.1Q2.5 5.8 0.9 2.6Q0 1 0 0z" fill="url(#b)"/>
+<path d="M0 0Q0 -1.1 1.1 -2.8Q3.3 -5.9 7.2 -7.2Q12.1 -8.9 16.2 -6.7Q20.5 -4.4 20.5 0Q20.5 4.4 16.2 6.7Q12.1 8.9 7.2 7.2Q3.3 5.9 1.1 2.8Q0 1.1 0 0M0 0Q0 -1.1 -1.1 -2.8Q-3.3 -5.9 -7.2 -7.2Q-12.1 -8.9 -16.2 -6.7Q-20.5 -4.4 -20.5 0Q-20.5 4.4 -16.2 6.7Q-12.1 8.9 -7.2 7.2Q-3.3 5.9 -1.1 2.8Q0 1.1 0 0M0 0Q0 -0.7 0.7 -1.7Q2 -3.6 4.4 -4.4Q7.4 -5.4 9.9 -4.1Q12.5 -2.7 12.5 0Q12.5 2.7 9.9 4.1Q7.4 5.4 4.4 4.4Q2 3.6 0.7 1.7Q0 0.7 0 0M0 0Q0 -0.7 -0.7 -1.7Q-2 -3.6 -4.4 -4.4Q-7.4 -5.4 -9.9 -4.1Q-12.5 -2.7 -12.5 0Q-12.5 2.7 -9.9 4.1Q-7.4 5.4 -4.4 4.4Q-2 3.6 -0.7 1.7Q0 0.7 0 0" stroke="#1a1d5c" stroke-opacity=".6" stroke-width="1.5"/>
+<path d="M0-12 6.5 0 0 12-6.5 0z" fill="#fff" stroke="#10112e" stroke-width="1.4"/>
+<path d="M0-12 6.5 0H0z" fill="#d3d9ff"/><path d="M0 12-6.5 0H0z" fill="#aab6ff"/><path d="M0 12 6.5 0H0z" fill="#8494fb"/>
+</g></g>
+<rect x="4.5" y="4.5" width="55" height="55" rx="13.5" fill="none" stroke="url(#r)"/>
+</svg>
