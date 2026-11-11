@@ -1,0 +1,209 @@
+name: ferrite-android
+
+# Ferrite for Android (android): Rust ad-blocking library, Kotlin app on
+# Android System WebView, unit tests, an emulator smoke test and (on request) a
+# GitHub release. Nothing is published unless workflow_dispatch is run with
+# publish=true.
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - "resources/adblock/**"
+      - ".github/workflows/ferrite-android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "resources/adblock/**"
+      - ".github/workflows/ferrite-android.yml"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub release ferrite-android-v<version> with the signed APK"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ferrite-android-${{ github.ref }}
+  cancel-in-progress: ${{ !inputs.publish }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: rust (host fmt, clippy, tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android/rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: android/rust
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  android:
+    name: build, unit tests, emulator test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: android
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      generated_key: ${{ steps.keystore.outputs.generated }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: android/rust
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Build the ad-blocking library for Android
+        working-directory: android/rust
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          echo "NDK: $ANDROID_NDK_HOME"
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 \
+            -o ../app/src/main/jniLibs build --release
+          ls -l ../app/src/main/jniLibs/*/
+
+      - id: meta
+        run: echo "version=$(sed -n 's/^ferriteVersion=//p' gradle.properties)" >> "$GITHUB_OUTPUT"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key
+        id: keystore
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/ferrite.jks"
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KS_ALIAS" ] && [ -n "$KS_KEY_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$ks"
+            echo "generated=false" >> "$GITHUB_OUTPUT"
+            echo "::add-mask::$KS_PASS"
+            pass="$KS_PASS"; alias="$KS_ALIAS"; kpass="$KS_KEY_PASS"
+            echo "Signing with the repository keystore." >> "$GITHUB_STEP_SUMMARY"
+          else
+            pass="$(openssl rand -hex 16)"; alias=ferrite-ci; kpass="$pass"
+            echo "::add-mask::$pass"
+            keytool -genkeypair -keystore "$ks" -alias "$alias" -keyalg RSA -keysize 3072 -validity 10000 \
+              -storepass "$pass" -keypass "$kpass" -dname "CN=Ferrite CI throw-away key" 2>/dev/null
+            echo "generated=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### WARNING: throw-away signing key"
+              echo "The repository secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and"
+              echo "ANDROID_KEY_PASSWORD are not set, so this APK is signed with a key generated in this job."
+              echo "**APKs from different runs cannot update each other** (Android refuses an update signed with another key)."
+              echo "See android/README.md, section Signing, to add the secrets."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Throw-away signing key::APKs from different runs cannot update each other. Add the ANDROID_KEYSTORE_* secrets (android/README.md)."
+          fi
+          echo "FERRITE_KEYSTORE=$ks" >> "$GITHUB_ENV"
+          echo "FERRITE_KEYSTORE_PASSWORD=$pass" >> "$GITHUB_ENV"
+          echo "FERRITE_KEY_ALIAS=$alias" >> "$GITHUB_ENV"
+          echo "FERRITE_KEY_PASSWORD=$kpass" >> "$GITHUB_ENV"
+
+      - name: Unit tests and release APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+
+      - name: Package the APK
+        run: |
+          v="${{ steps.meta.outputs.version }}"
+          mkdir -p "$RUNNER_TEMP/out"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/Ferrite-$v.apk"
+          cd "$RUNNER_TEMP/out"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --verbose --print-certs "Ferrite-$v.apk"
+          sha256sum "Ferrite-$v.apk" > SHA256SUMS
+          size=$(stat -c %s "Ferrite-$v.apk")
+          unzip -l "Ferrite-$v.apk" | grep -E "\.so$|classes|assets/" || true
+          echo "APK: Ferrite-$v.apk, $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
+          cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferrite-android-apk
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emulator smoke test (API 34, x86_64)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          working-directory: android
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrite-android-reports
+          path: |
+            android/app/build/reports
+            android/app/build/outputs/androidTest-results
+          if-no-files-found: ignore
+
+  release:
+    name: publish release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [rust, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ferrite-android-apk
+          path: out
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.android.outputs.version }}
+          GENERATED_KEY: ${{ needs.android.outputs.generated_key }}
+        run: |
+          tag="ferrite-android-v$VERSION"
+          cp android/RELEASE_NOTES.md notes.md
+          if [ "$GENERATED_KEY" = "true" ]; then
+            printf '\n**Warning:** this APK is signed with a throw-away key, so it cannot update (or be updated by) APKs from other builds. Uninstall before installing another build.\n' >> notes.md
+          fi
+          gh release create "$tag" "out/Ferrite-$VERSION.apk" out/SHA256SUMS \
+            --target "$GITHUB_SHA" --title "Ferrite for Android $VERSION" --notes-file notes.md

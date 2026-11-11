@@ -32,6 +32,6 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   `docs/CODECS.md` for a codec build.
 - YouTube ad blocking and Proton Pass were tested against local mock pages,
   not against the real services.
-- See `browser/docs/STATUS.md` for everything verified and not verified.
+- See `docs/STATUS.md` for everything verified and not verified.
 
 This is an early release (0.2.0).

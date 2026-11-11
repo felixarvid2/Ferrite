@@ -1,0 +1,94 @@
+name: ferrite-release
+
+# Builds Ferrite's Linux packages and publishes them as a GitHub release
+# tagged ferrite-v<version> (version from Cargo.toml). Run it by
+# pushing such a tag, or manually with publish=true (creates the tag on the
+# commit it runs on). A manual run with publish=false only uploads artifacts.
+
+on:
+  push:
+    tags:
+      - "ferrite-v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub release (tag ferrite-v<version>)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build dependencies
+        # The runner image already has most of these (it ships Chrome). Install
+        # only what is missing; GitHub's Ubuntu mirrors sometimes hang, so apt
+        # gets short timeouts and the step a time limit, and a failed install
+        # does not stop the build (a real missing library fails it later).
+        timeout-minutes: 6
+        continue-on-error: true
+        run: |
+          missing=""
+          for p in cmake ninja-build g++ pkg-config librsvg2-bin libnss3 libgbm1 libasound2t64; do
+            dpkg -s "$p" >/dev/null 2>&1 || missing="$missing $p"
+          done
+          echo "missing:${missing:- none}"
+          [ -z "$missing" ] && exit 0
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT update
+          sudo apt-get $APT install -y --no-install-recommends $missing
+      - name: Version
+        id: version
+        run: |
+          VERSION="$(awk -F'"' '/^\[workspace.package\]/ {p=1} p && /^version/ {print $2; exit}' Cargo.toml)"
+          echo "tag=ferrite-v${VERSION}" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "ferrite-v${VERSION}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match version ${VERSION}"; exit 1
+          fi
+
+      - name: Install CEF
+        run: scripts/setup-cef.sh
+
+      - name: Test
+        run: CEF_PATH=$HOME/.local/share/cef cargo test --release --workspace
+
+      - name: Package (.deb and AppImage)
+        run: |
+          export CEF_PATH=$HOME/.local/share/cef
+          cargo build --release
+          scripts/package.sh
+          cd dist && sha256sum ferrite_*_amd64.deb Ferrite-*-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Ferrite ${{ steps.version.outputs.tag }}
+          body_path: packaging/RELEASE_NOTES.md
+          files: |
+            dist/ferrite_*_amd64.deb
+            dist/Ferrite-*-x86_64.AppImage
+            dist/SHA256SUMS
+
+      - name: Keep packages (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrite-packages
+          path: |
+            dist/ferrite_*_amd64.deb
+            dist/Ferrite-*-x86_64.AppImage
+            dist/SHA256SUMS

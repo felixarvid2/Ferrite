@@ -6,7 +6,7 @@ license = "MIT"
 description = "Ad blocking engine (Brave's adblock-rust) for Ferrite for Android, exposed over JNI."
 publish = false
 
-# Not part of the desktop workspace (browser/Cargo.toml excludes it too).
+# Not part of the desktop workspace (the root Cargo.toml excludes it too).
 [workspace]
 
 [lib]

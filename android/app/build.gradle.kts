@@ -17,7 +17,7 @@ android {
         versionName = ferriteVersion
         versionCode = versionParts[0] * 1_000_000 + versionParts[1] * 1_000 + versionParts[2]
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "UPDATE_REPO", "\"felixarvid2/test\"")
+        buildConfigField("String", "UPDATE_REPO", "\"felixarvid2/Ferrite\"")
     }
 
     // CI signs with the repository's keystore secrets or a throw-away key

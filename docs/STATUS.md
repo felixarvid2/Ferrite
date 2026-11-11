@@ -97,7 +97,7 @@ low-memory phones. No Proton Pass, no extensions.
 
 ### Update check
 
-- `core/src/update.rs` parses `https://api.github.com/repos/felixarvid2/test/releases?per_page=20`
+- `core/src/update.rs` parses `https://api.github.com/repos/felixarvid2/Ferrite/releases?per_page=20`
   and picks the newest non-draft, non-prerelease `ferrite-v*` tag by semver
   (other tags such as `assets-large-v1` are ignored). Nothing is downloaded or
   installed; the deb needs root, so the user installs it.

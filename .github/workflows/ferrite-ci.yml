@@ -1,0 +1,89 @@
+name: ferrite-ci
+
+# Checks every change to the Ferrite browser: formatting, clippy and tests.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "android/**"
+      - ".github/workflows/ferrite-android.yml"
+  pull_request:
+    paths-ignore:
+      - "android/**"
+      - ".github/workflows/ferrite-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ferrite-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Build dependencies
+        # The runner image already has most of these (it ships Chrome). Install
+        # only what is missing; GitHub's Ubuntu mirrors sometimes hang, so apt
+        # gets short timeouts and the step a time limit, and a failed install
+        # does not stop the build (a real missing library fails it later).
+        timeout-minutes: 6
+        continue-on-error: true
+        run: |
+          missing=""
+          for p in cmake ninja-build g++ pkg-config libnss3 libgbm1 libasound2t64; do
+            dpkg -s "$p" >/dev/null 2>&1 || missing="$missing $p"
+          done
+          echo "missing:${missing:- none}"
+          [ -z "$missing" ] && exit 0
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT update
+          sudo apt-get $APT install -y --no-install-recommends $missing
+      - name: CEF version
+        id: cef
+        run: echo "version=$(grep -oP 'cef = \{ version = "=\K[^"]+' app/Cargo.toml)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/cef
+          key: cef-${{ steps.cef.outputs.version }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.cargo/bin/export-cef-dir
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install CEF
+        run: |
+          if [ ! -f "$HOME/.local/share/cef/libcef.so" ]; then scripts/setup-cef.sh; fi
+
+      - name: Clippy
+        run: CEF_PATH=$HOME/.local/share/cef cargo clippy --release --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: CEF_PATH=$HOME/.local/share/cef cargo test --release --workspace
+
+      - name: Adblock scriptlets file is valid
+        run: |
+          python3 -I -c "import json; d=json.load(open('resources/adblock/ubo-scriptlets.json')); assert len(d) > 100, len(d)"

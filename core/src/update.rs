@@ -10,7 +10,8 @@ use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
 
 /// Releases of the Ferrite repository, newest first (GitHub's order).
-pub const RELEASES_URL: &str = "https://api.github.com/repos/felixarvid2/test/releases?per_page=20";
+pub const RELEASES_URL: &str =
+    "https://api.github.com/repos/felixarvid2/Ferrite/releases?per_page=20";
 /// Release tags look like `ferrite-v0.1.1`; other tags in the repo are ignored.
 const TAG_PREFIX: &str = "ferrite-v";
 /// Responses larger than this are rejected.

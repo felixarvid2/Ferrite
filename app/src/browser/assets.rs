@@ -1,4 +1,4 @@
-//! UI files compiled into the binary (from `browser/ui/`). Set
+//! UI files compiled into the binary (from `ui/`). Set
 //! `FERRITE_UI_DIR` to serve them from disk instead while developing.
 
 macro_rules! ui_files {

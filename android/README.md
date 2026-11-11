@@ -34,12 +34,12 @@ Same design as the desktop (`core/src/blocker.rs`, `app/src/browser/inject.rs`):
 - `rust/` (crate `ferrite-android`, cdylib, JNI via the `jni` crate) wraps Brave's `adblock` 0.13 with the
   same features as the desktop core. It does not depend on `ferrite-core`. Entry points
   (`create`, `shouldBlock`, `cosmetic`, `free`) catch panics. The crate is excluded from the desktop
-  workspace (`browser/Cargo.toml`).
+  workspace (`Cargo.toml`).
 - Lists (same URLs as the desktop: EasyList, EasyPrivacy, uBO filters, quick-fixes, unbreak) are downloaded in
   Kotlin with `HttpURLConnection` into app storage, refreshed when older than a day (on start/resume),
   and the engine is rebuilt on a background thread. uBO lists are trusted (permission bit 0). The scriptlet
   resources `resources/adblock/ubo-scriptlets.json` and the uBO licence are packaged as APK assets straight
-  from `browser/resources/adblock/`.
+  from `resources/adblock/`.
 - Network: `shouldInterceptRequest` asks the engine for every subresource; blocked ones get a 403 response with
   an empty body (so scripts and images fire `error`). First party is the tab's current top URL. The shield
   button shows the count and "Turn off blocking on this site" (exceptions match the host and its subdomains,
@@ -67,7 +67,7 @@ Requirements: JDK 17, Android SDK (platform 35, build-tools 35), Rust with the A
 [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) plus an NDK for the native library.
 
 ```sh
-cd browser/android/rust
+cd android/rust
 cargo test                                  # host tests
 cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 --platform 26 -o ../app/src/main/jniLibs build --release
 cd .. && ./gradlew testDebugUnitTest assembleRelease
@@ -79,8 +79,8 @@ Emulator test: `./gradlew connectedDebugAndroidTest` (needs a device/emulator).
 
 ## CI and releases
 
-`.github/workflows/ferrite-android.yml` runs on pushes and pull requests touching `browser/android/**`,
-`browser/resources/adblock/**` or the workflow: Rust fmt/clippy/tests, the NDK build, Kotlin unit tests, the
+`.github/workflows/ferrite-android.yml` runs on pushes and pull requests touching `android/**`,
+`resources/adblock/**` or the workflow: Rust fmt/clippy/tests, the NDK build, Kotlin unit tests, the
 release APK, and an emulator smoke test (API 34, x86_64). **It publishes only** when started manually
 (Actions > ferrite-android > Run workflow) with `publish` ticked: it creates the GitHub release
 `ferrite-android-v<ferriteVersion>` (version in `gradle.properties`) with `Ferrite-<version>.apk`, `SHA256SUMS`
