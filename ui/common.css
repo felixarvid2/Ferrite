@@ -156,4 +156,4 @@ label { display: inline-flex; align-items: center; cursor: pointer; }
 :root[data-topnav] .sidebar .brand { margin: 0 12px 0 0; padding: 4px 6px; }
 :root[data-topnav] .sidebar a.nav { min-height: 32px; padding: 5px 12px; border-radius: 16px; gap: 8px; }
 :root[data-topnav] .sidebar a.nav svg { width: 16px; height: 16px; }
-:root[data-topnav] .shell > main.page { padding-top: 20px; }
+:root[data-topnav] .shell > main.page { padding-top: 28px; }
