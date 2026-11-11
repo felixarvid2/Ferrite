@@ -160,7 +160,8 @@ Network traffic went through an HTTPS-intercepting proxy.
   `scripts/build-cef-codecs.sh` builds the pinned CEF with
   `proprietary_codecs=true ffmpeg_branding=Chrome` on your machine (about
   120 GB of disk and hours of build time; not run in the dev container) and
-  installs it for `CEF_PATH`. See docs/CODECS.md for the steps, the one
+  installs it for `CEF_PATH`. H.264/AAC playback was verified against a
+  third-party codec build of the same CEF branch. See docs/CODECS.md for the steps, the one
   third-party prebuilt found and the licensing issues. `ferrite://about/`
   shows which codecs a build supports.
 - No Widevine DRM. Netflix, the Spotify web player and Disney+ will not play.

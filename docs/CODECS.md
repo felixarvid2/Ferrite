@@ -58,9 +58,14 @@ built for OBS with `proprietary_codecs=true ffmpeg_branding=Chrome`.
 - It comes from a small third-party organisation with unknown provenance and
   update cadence. Verify the sha256 and pin it.
 - The API version (15600) matches. `build-cef-codecs.sh --install-only` accepts
-  it and warns about the version. Ferrite was **not** run against it here,
-  because the container's safety policy blocks executing that third-party
-  binary.
+  it and warns about the version.
+- **Verified** with the user's approval: Ferrite built against it with no code
+  changes. In the running browser, an H.264/AAC MP4 (MDN's `flower.mp4`,
+  960x540) played with `currentTime` advancing, `canPlayType` returned
+  "probably" for `avc1` and `mp4a`, and `ferrite://about/` showed
+  "H.264 ✓ AAC ✓" with the runtime versions CEF 156.0.8 / Chromium
+  156.0.8078.48. The standard build gives `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`
+  for the same file.
 
 ```sh
 curl -LO https://github.com/obs-rust/cef/releases/download/8078/cef_binary_8078_linux_x86_64.tar.xz

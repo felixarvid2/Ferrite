@@ -457,8 +457,8 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         }
         "about" => json!({
             "ferrite": env!("CARGO_PKG_VERSION"),
-            "cef": format!("{}.{}.{}", sys::CEF_VERSION_MAJOR, sys::CEF_VERSION_MINOR, sys::CEF_VERSION_PATCH),
-            "chromium": format!("{}.{}.{}.{}", sys::CHROME_VERSION_MAJOR, sys::CHROME_VERSION_MINOR, sys::CHROME_VERSION_BUILD, sys::CHROME_VERSION_PATCH),
+            "cef": runtime_version(&[0, 1, 2]),
+            "chromium": runtime_version(&[4, 5, 6, 7]),
             "profile_dir": s.paths.root,
             "sandbox": !s.launch.no_sandbox,
         }),
@@ -533,4 +533,20 @@ fn clear_browsing_data(s: &mut State, win: WinId, args: &Value) -> Result<Value>
         done.push("permissions");
     }
     Ok(json!({ "cleared": done }))
+}
+
+// Not bound by cef-rs; part of libcef's stable C API (cef_version_info.h).
+extern "C" {
+    fn cef_version_info(entry: std::os::raw::c_int) -> std::os::raw::c_int;
+}
+
+/// Version of the libcef actually loaded (it can differ from the headers the
+/// crate was built with, e.g. with a custom codec build).
+fn runtime_version(entries: &[i32]) -> String {
+    entries
+        .iter()
+        // SAFETY: plain query of the loaded library; entries 0..=7 are valid.
+        .map(|e| unsafe { cef_version_info(*e) }.to_string())
+        .collect::<Vec<_>>()
+        .join(".")
 }
