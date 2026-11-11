@@ -226,6 +226,25 @@ function renderPrompts() {
     row.append(text, label, block, allow);
     box.append(row);
   }
+  // "Save password to Proton Pass?" (the password itself never reaches this page).
+  const ps = state.pass_save;
+  if (ps) {
+    const row = el("div", "prompt");
+    row.id = "pass-save";
+    const text = el("div", "grow what");
+    const icon = el("span"); icon.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="2.6" fill="none" stroke="currentColor"/><path d="M8.1 8H14M12 8v2.5M14 8v1.5"/></svg>';
+    const words = el("span");
+    words.append("Save password for ", el("b", null, ps.site), " to Proton Pass?");
+    if (ps.username) words.append(" ", el("span", "muted", "(" + ps.username + ")"));
+    text.append(icon, words);
+    const answer = action => () => api("pass_save_answer", { id: ps.id, action });
+    const save = el("button", "pbtn primary", "Save");
+    const never = el("button", "pbtn", "Never for this site");
+    const later = el("button", "pbtn", "Not now");
+    save.onclick = answer("save"); never.onclick = answer("never"); later.onclick = answer("dismiss");
+    row.append(text, never, later, save);
+    box.append(row);
+  }
 }
 
 function renderDownloads() {

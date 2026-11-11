@@ -7,14 +7,29 @@
 //!   the user picks a login from the menu, is checked against the page again on
 //!   the UI thread, and goes straight into the page's main frame; it is never
 //!   stored, logged or sent to a Ferrite UI page.
+//!
+//! Saving a login (the user signed in on a site): `inject.rs` captures the
+//! submitted username and password in an isolated world and reports them
+//! here. The password stays in Rust memory in a [`SavePrompt`] until the user
+//! answers (or 2 minutes pass, or the tab closes); the UI strip only gets
+//! `{id, site, username}`. It is written with `pass-cli item create login
+//! --from-template -`, the JSON going through stdin (argv is world-readable
+//! in /proc). Not offered in private windows, for sites on the never list, or
+//! when the same username already has a cached login for the site.
+//!
+//! 2FA: for logins with a TOTP secret the menu has an extra "2FA code" item;
+//! the code (not the secret) is fetched with `pass-cli item totp`, checked
+//! against the page again, and typed into the first OTP-looking input or,
+//! failing that, copied to the clipboard.
 
 use super::{later, State, TabId, WinId};
 use crate::engine::{self, cef_str, from_userfree};
 use cef::*;
-use ferrite_core::passcli::{self, Login};
+use ferrite_core::passcli::{self, Login, Vault};
 use serde_json::{json, Value};
 use std::cell::RefCell;
-use std::io::Read;
+use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -24,6 +39,13 @@ const CLI_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STDOUT: usize = 32 * 1024 * 1024;
 const MAX_STDERR: usize = 64 * 1024;
 const MAX_MENU_ENTRIES: usize = 30;
+/// Menu command id of the first "2FA code" item (password items are 1..).
+const TOTP_BASE: i32 = 1000;
+/// How long an unanswered "save password?" prompt (and its password) lives.
+const PROMPT_TTL_MS: i64 = 2 * 60 * 1000;
+const MAX_PROMPTS: usize = 8;
+/// The clipboard copy of a 2FA code is cleared after this long (if unchanged).
+const CLIPBOARD_CLEAR_MS: i64 = 30_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Status {
@@ -41,8 +63,24 @@ struct CountMemo {
     count: usize,
 }
 
+/// A login captured on a page, waiting for the user's answer. Holds the
+/// password: never log it, never send it to a page or UI.
+struct SavePrompt {
+    id: String,
+    tab: TabId,
+    /// Site key (host without "www.") the login was submitted on.
+    site: String,
+    /// Origin of the page (`https://host[:port]`), saved as the item's URL.
+    origin: String,
+    username: String,
+    password: String,
+}
+
 pub struct Store {
     logins: Vec<Login>,
+    vaults: Vec<Vault>,
+    save_prompts: Vec<SavePrompt>,
+    prompt_seq: u64,
     status: Status,
     /// When the last refresh finished (successfully or not).
     fetched: Option<Instant>,
@@ -58,6 +96,9 @@ impl Default for Store {
     fn default() -> Self {
         Store {
             logins: Vec::new(),
+            vaults: Vec::new(),
+            save_prompts: Vec::new(),
+            prompt_seq: 0,
             status: Status::Disabled,
             fetched: None,
             refreshing: false,
@@ -140,13 +181,33 @@ fn read_limited<R: Read + Send + 'static>(
 
 /// Run `cli args…` and return stdout. Errors carry the first stderr line.
 fn run_cli(cli: &PathBuf, args: &[&str]) -> Result<String, String> {
+    run_cli_with_stdin(cli, args, None)
+}
+
+/// Like [`run_cli`], feeding `input` to stdin (written on its own thread so a
+/// CLI that does not read it cannot block us; the timeout still applies).
+fn run_cli_with_stdin(
+    cli: &PathBuf,
+    args: &[&str],
+    input: Option<Vec<u8>>,
+) -> Result<String, String> {
     let mut child = Command::new(cli)
         .args(args)
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("cannot start pass-cli: {e}"))?;
+    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+            // Dropping stdin closes it: the CLI sees end of input.
+        });
+    }
     let (Some(out), Some(err)) = (child.stdout.take(), child.stderr.take()) else {
         let _ = child.kill();
         let _ = child.wait();
@@ -188,9 +249,12 @@ fn run_cli(cli: &PathBuf, args: &[&str]) -> Result<String, String> {
     String::from_utf8(stdout).map_err(|_| "pass-cli output is not UTF-8".to_string())
 }
 
-fn fetch_logins(cli: &PathBuf) -> Result<Vec<Login>, String> {
+type Fetched = (Vec<Login>, Vec<Vault>);
+
+fn fetch_logins(cli: &PathBuf) -> Result<Fetched, String> {
     let vaults = run_cli(cli, &["vault", "list", "--output", "json"])?;
-    let shares = passcli::parse_vaults(&vaults);
+    let vault_infos = passcli::parse_vault_infos(&vaults);
+    let shares: Vec<&str> = vault_infos.iter().map(|v| v.share_id.as_str()).collect();
     let mut logins = Vec::new();
     let mut first_err = None;
     for share in &shares {
@@ -215,7 +279,7 @@ fn fetch_logins(cli: &PathBuf) -> Result<Vec<Login>, String> {
     }
     match first_err {
         Some(e) if logins.is_empty() => Err(e),
-        _ => Ok(logins),
+        _ => Ok((logins, vault_infos)),
     }
 }
 
@@ -272,7 +336,7 @@ pub fn refresh(s: &mut State, force: bool) {
     s.mark_all_dirty();
 }
 
-fn finish_refresh(s: &mut State, generation: u64, result: Result<Vec<Login>, String>) {
+fn finish_refresh(s: &mut State, generation: u64, result: Result<Fetched, String>) {
     let store = &mut s.passwords;
     if store.generation != generation {
         return;
@@ -280,13 +344,15 @@ fn finish_refresh(s: &mut State, generation: u64, result: Result<Vec<Login>, Str
     store.refreshing = false;
     store.fetched = Some(Instant::now());
     match result {
-        Ok(logins) => {
+        Ok((logins, vaults)) => {
             store.logins = logins;
+            store.vaults = vaults;
             store.version += 1;
             store.status = Status::Ready;
         }
         Err(e) => {
             store.logins.clear();
+            store.vaults.clear();
             store.version += 1;
             store.status = Status::Error(e);
         }
@@ -301,6 +367,7 @@ pub fn tick(s: &mut State) {
 
 /// Settings were saved: apply an enable/disable or path change.
 pub fn settings_changed(s: &mut State, was_enabled: bool, old_cli: &str) {
+    apply_capture_flag(s);
     let enabled = s.settings.proton_pass;
     if enabled == was_enabled && old_cli == s.settings.proton_pass_cli {
         return;
@@ -320,6 +387,41 @@ pub fn settings_changed(s: &mut State, was_enabled: bool, old_cli: &str) {
         refresh(s, true);
     }
     s.mark_all_dirty();
+}
+
+/// Login capture runs while Proton Pass is on and "offer to save" is on.
+/// Switching it off removes the page script and drops pending prompts.
+pub fn apply_capture_flag(s: &mut State) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let want = s.settings.proton_pass && s.settings.proton_pass_offer_save;
+    let was = super::inject::CAPTURE.swap(want, Relaxed);
+    if want && !was {
+        // Cover the pages tabs are showing now: register on every browser.
+        let browsers: Vec<Browser> = s.tabs.values().filter_map(|t| t.browser.clone()).collect();
+        later(move |_| {
+            for mut b in browsers {
+                super::inject::capture_ensure(&mut b);
+            }
+        });
+    }
+    if !want {
+        s.passwords.save_prompts.clear();
+        if was {
+            let browsers: HashMap<i32, Browser> = s
+                .tabs
+                .values()
+                .filter_map(|t| t.browser.clone())
+                .map(|b| (b.identifier(), b))
+                .collect();
+            super::inject::capture_clear_all(|id| browsers.get(&id).cloned());
+        }
+        s.mark_all_dirty();
+    }
+}
+
+/// Vaults for the settings page (filled by the last refresh).
+pub fn vaults_json(s: &State) -> Value {
+    json!(s.passwords.vaults)
 }
 
 pub fn status_json(s: &State) -> Value {
@@ -358,6 +460,16 @@ fn menu_label(l: &Login) -> String {
     text.replace('&', "&&")
 }
 
+fn totp_label(l: &Login) -> String {
+    let who = if l.username.is_empty() {
+        &l.title
+    } else {
+        &l.username
+    };
+    let who: String = who.chars().filter(|c| !c.is_control()).take(60).collect();
+    format!("2FA code \u{2014} {}", who.replace('&', "&&"))
+}
+
 pub fn show_menu(s: &State, win: WinId, x: i32, y: i32) {
     if !s.settings.proton_pass {
         return;
@@ -381,6 +493,13 @@ pub fn show_menu(s: &State, win: WinId, x: i32, y: i32) {
     for (i, l) in entries.iter().enumerate() {
         model.add_item(i as i32 + 1, Some(&cef_str(&menu_label(l))));
     }
+    let mut separated = false;
+    for (i, l) in entries.iter().enumerate().filter(|(_, l)| l.has_totp) {
+        if !std::mem::replace(&mut separated, true) {
+            model.add_separator();
+        }
+        model.add_item(TOTP_BASE + i as i32, Some(&cef_str(&totp_label(l))));
+    }
     let mut point = Point { x, y };
     w.ui_view.convert_point_to_screen(Some(&mut point));
     window.show_menu(Some(&mut model), Some(&point), MenuAnchorPosition::TOPRIGHT);
@@ -395,11 +514,17 @@ wrap_menu_model_delegate! {
 
     impl MenuModelDelegate {
         fn execute_command(&self, _menu_model: Option<&mut MenuModel>, command_id: ::std::os::raw::c_int, _event_flags: EventFlags) {
-            let Some(login) = usize::try_from(command_id - 1).ok().and_then(|i| self.entries.get(i)).cloned() else {
+            let totp = command_id >= TOTP_BASE;
+            let index = if totp { command_id - TOTP_BASE } else { command_id - 1 };
+            let Some(login) = usize::try_from(index).ok().and_then(|i| self.entries.get(i)).cloned() else {
                 return;
             };
             let (win, tab) = (self.win, self.tab);
-            later(move |s| start_fill(s, win, tab, login));
+            if totp {
+                later(move |s| start_totp(s, win, tab, login));
+            } else {
+                later(move |s| start_fill(s, win, tab, login));
+            }
         }
     }
 }
@@ -415,22 +540,29 @@ fn tab_target(s: &State, tab: TabId) -> Option<(i32, String)> {
     Some((b.identifier(), from_userfree(&b.main_frame()?.url())))
 }
 
-fn start_fill(s: &mut State, win: WinId, tab: TabId, login: Login) {
+/// Checks shared by fill and 2FA: feature on, ids sane, the login still
+/// matches the page of `tab` (in `win`). Returns the CLI and the browser id.
+fn precheck(s: &State, win: WinId, tab: TabId, login: &Login) -> Option<(PathBuf, i32)> {
     if !s.settings.proton_pass
         || !passcli::valid_id(&login.share_id)
         || !passcli::valid_id(&login.item_id)
     {
-        return;
+        return None;
     }
-    let Some((browser_id, url)) = tab_target(s, tab) else {
-        return;
-    };
-    if s.tabs.get(&tab).map(|t| t.win) != Some(win) || !passcli::matches(&login, &url) {
+    let (browser_id, url) = tab_target(s, tab)?;
+    if s.tabs.get(&tab).map(|t| t.win) != Some(win) || !passcli::matches(login, &url) {
         toast(s, win, "This login does not match the page");
-        return;
+        return None;
     }
     let Some(cli) = resolve_cli(&s.settings.proton_pass_cli) else {
         toast(s, win, "pass-cli not found");
+        return None;
+    };
+    Some((cli, browser_id))
+}
+
+fn start_fill(s: &mut State, win: WinId, tab: TabId, login: Login) {
+    let Some((cli, browser_id)) = precheck(s, win, tab, &login) else {
         return;
     };
     std::thread::spawn(move || {
@@ -519,6 +651,397 @@ pub fn fill_script(username: &str, password: &str) -> String {
     )
 }
 
+// ------------------------------------------------------------ 2FA codes
+
+fn fetch_totp(cli: &PathBuf, login: &Login) -> Result<String, String> {
+    let out = run_cli(
+        cli,
+        &[
+            "item",
+            "totp",
+            "--share-id",
+            &login.share_id,
+            "--item-id",
+            &login.item_id,
+            "--output",
+            "json",
+        ],
+    )?;
+    passcli::parse_totp(&out).ok_or_else(|| "no 2FA code".to_string())
+}
+
+fn start_totp(s: &mut State, win: WinId, tab: TabId, login: Login) {
+    let Some((cli, browser_id)) = precheck(s, win, tab, &login) else {
+        return;
+    };
+    if !login.has_totp {
+        return;
+    }
+    std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(|| fetch_totp(&cli, &login))
+            .unwrap_or_else(|_| Err("internal error".into()));
+        engine::post_ui(move || {
+            super::with_state(|s| finish_totp(s, win, tab, browser_id, login, result));
+        });
+    });
+}
+
+fn finish_totp(
+    s: &mut State,
+    win: WinId,
+    tab: TabId,
+    browser_id: i32,
+    login: Login,
+    result: Result<String, String>,
+) {
+    let code = match result {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Proton Pass: fetching a 2FA code failed: {e}");
+            toast(s, win, "Proton Pass: could not get the 2FA code");
+            return;
+        }
+    };
+    let browser = match tab_target(s, tab) {
+        Some((id, url)) if id == browser_id && passcli::matches(&login, &url) => {
+            s.tabs.get(&tab).and_then(|t| t.browser.clone())
+        }
+        _ => None,
+    };
+    let Some(browser) = browser else {
+        toast(s, win, "Page changed; 2FA code not filled");
+        return;
+    };
+    // Outside the state borrow (DevTools calls may call back synchronously).
+    later(move |_| {
+        let mut browser = browser;
+        let job = OtpJob {
+            win,
+            code: code.clone(),
+        };
+        match super::inject::evaluate(&mut browser, &otp_script(&code)) {
+            Some(id) => {
+                EVALS.with(|e| e.borrow_mut().insert(id, job));
+                // No answer from DevTools: treat as "not filled".
+                engine::post_local_delayed(5000, move || {
+                    if let Some(job) = EVALS.with(|e| e.borrow_mut().remove(&id)) {
+                        later(move |s| otp_done(s, job, false));
+                    }
+                });
+            }
+            None => later(move |s| otp_done(s, job, false)),
+        }
+    });
+}
+
+/// A 2FA code waiting for the page script's verdict.
+struct OtpJob {
+    win: WinId,
+    code: String,
+}
+
+thread_local! {
+    /// DevTools message id of the OTP script -> job.
+    static EVALS: RefCell<HashMap<i32, OtpJob>> = RefCell::new(HashMap::new());
+}
+
+/// A DevTools method result arrived: if it answers an OTP script, handle it
+/// and return true.
+pub fn eval_result(message_id: i32, success: bool, result: &[u8]) -> bool {
+    let Some(job) = EVALS.with(|e| e.borrow_mut().remove(&message_id)) else {
+        return false;
+    };
+    let filled = success
+        && serde_json::from_slice::<Value>(result)
+            .ok()
+            .and_then(|v| v.pointer("/result/value").and_then(Value::as_bool))
+            == Some(true);
+    later(move |s| otp_done(s, job, filled));
+    true
+}
+
+fn otp_done(s: &mut State, job: OtpJob, filled: bool) {
+    if filled {
+        toast(s, job.win, "2FA code filled");
+        return;
+    }
+    // No OTP input found: the user asked for the code, so copy it. It is
+    // removed from the clipboard again after a while if still there.
+    super::context_menu::copy_text(&job.code);
+    let code = job.code;
+    engine::post_local_delayed(CLIPBOARD_CLEAR_MS, move || {
+        super::context_menu::clear_text_if(&code);
+    });
+    toast(s, job.win, "2FA code copied");
+}
+
+/// Page expression (main world) that types `code` into the first visible
+/// input that looks like a one-time-code field and returns whether it did.
+/// The code is validated alphanumeric and spliced as a JSON string literal.
+pub fn otp_script(code: &str) -> String {
+    const BODY: &str = r#"(function (code) {
+  function vis(e) {
+    var r = e.getBoundingClientRect(), cs = getComputedStyle(e);
+    return !e.disabled && !e.readOnly && r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none';
+  }
+  function setv(e, v) {
+    var d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    d.set.call(e, v);
+    e.dispatchEvent(new Event('input', { bubbles: true }));
+    e.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function ml(e) { var m = parseInt(e.getAttribute('maxlength') || '', 10); return isNaN(m) ? 0 : m; }
+  var types = ['text', 'tel', 'number', ''];
+  var cand = [].slice.call(document.querySelectorAll('input')).filter(function (e) {
+    return types.indexOf((e.getAttribute('type') || '').toLowerCase()) >= 0 && vis(e) && (ml(e) === 0 || ml(e) >= code.length);
+  });
+  var name = /otp|totp|2fa|mfa|one.?time|verif|security.?code|auth.?code|authenticator|\bcode\b|token/i;
+  var not = /zip|post|promo|coupon|country|area|search|captcha/i;
+  var pick = cand.find(function (e) { return (e.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/).indexOf('one-time-code') >= 0; })
+    || cand.find(function (e) {
+      var t = [e.name, e.id, e.getAttribute('aria-label'), e.placeholder].join(' ');
+      return name.test(t) && !not.test(t);
+    })
+    || cand.find(function (e) {
+      var im = (e.getAttribute('inputmode') || '').toLowerCase(), m = ml(e);
+      return (im === 'numeric' || im === 'decimal') && m >= 6 && m <= 8;
+    });
+  if (!pick) return false;
+  pick.focus();
+  setv(pick, code);
+  return true;
+})"#;
+    let code = if code.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        code
+    } else {
+        ""
+    };
+    format!(
+        "{BODY}({});",
+        serde_json::to_string(code).unwrap_or_else(|_| "\"\"".into())
+    )
+}
+
+// ------------------------------------------------------------ saving logins
+
+fn random_id(seq: u64) -> String {
+    use std::hash::{BuildHasher, Hasher};
+    // RandomState is seeded randomly per process: unguessable ids.
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u64(seq);
+    h.write_i64(ferrite_core::now_ms());
+    format!("{:016x}", h.finish())
+}
+
+fn expire_prompt(id: String) {
+    engine::post_local_delayed(PROMPT_TTL_MS, move || {
+        later(move |s| {
+            let before = s.passwords.save_prompts.len();
+            s.passwords.save_prompts.retain(|p| p.id != id);
+            if s.passwords.save_prompts.len() != before {
+                s.mark_all_dirty();
+            }
+        });
+    });
+}
+
+/// A login was submitted in the main frame of `browser_id` whose URL was
+/// `url` (read by the Rust side, not taken from the page). `payload` is the
+/// untrusted JSON from the capture script.
+pub fn capture(s: &mut State, browser_id: i32, url: String, payload: String) {
+    if !s.settings.proton_pass
+        || !s.settings.proton_pass_offer_save
+        || s.passwords.status != Status::Ready
+    {
+        tracing::debug!("login capture ignored: Proton Pass off or not ready");
+        return;
+    }
+    let Some(tab) = s.tab_of_browser(browser_id) else {
+        tracing::debug!("login capture ignored: not a tab");
+        return;
+    };
+    let Some(win) = s.tabs.get(&tab).map(|t| t.win) else {
+        return;
+    };
+    // Private windows never offer to save.
+    if s.is_private(win) {
+        tracing::debug!("login capture ignored: private window");
+        return;
+    }
+    let Some(site) = ferrite_core::blocker::site_key(&url) else {
+        return; // not http(s)
+    };
+    if ferrite_core::blocker::is_exception(&s.settings.proton_pass_never_save, &url) {
+        tracing::debug!("login capture ignored: site is on the never list");
+        return;
+    }
+    #[derive(serde::Deserialize)]
+    struct Payload {
+        username: String,
+        password: String,
+    }
+    let Ok(p) = serde_json::from_str::<Payload>(&payload) else {
+        return;
+    };
+    drop(payload);
+    let username = p.username.trim().to_string();
+    if p.password.is_empty()
+        || p.password.chars().count() > 1000
+        || username.chars().count() > 500
+        || username.chars().any(char::is_control)
+    {
+        tracing::debug!("login capture ignored: empty or oversized values");
+        return;
+    }
+    if passcli::has_login_for(&s.passwords.logins, &url, &username) {
+        tracing::debug!("login capture ignored: login already saved");
+        return;
+    }
+    let Ok(parsed) = url::Url::parse(&url) else {
+        return;
+    };
+    let origin = parsed.origin().ascii_serialization();
+    let store = &mut s.passwords;
+    // One prompt per tab: a newer submit replaces the older.
+    store.save_prompts.retain(|x| x.tab != tab);
+    while store.save_prompts.len() >= MAX_PROMPTS {
+        store.save_prompts.remove(0);
+    }
+    store.prompt_seq += 1;
+    let id = random_id(store.prompt_seq);
+    store.save_prompts.push(SavePrompt {
+        id: id.clone(),
+        tab,
+        site,
+        origin,
+        username,
+        password: p.password,
+    });
+    expire_prompt(id);
+    s.mark_dirty(win);
+}
+
+/// The prompt to show in the UI strip for `tab` (no password).
+pub fn prompt_json(s: &State, tab: Option<TabId>) -> Value {
+    let Some(tab) = tab else { return Value::Null };
+    s.passwords
+        .save_prompts
+        .iter()
+        .find(|p| p.tab == tab)
+        .map_or(
+            Value::Null,
+            |p| json!({ "id": p.id, "site": p.site, "username": p.username }),
+        )
+}
+
+pub fn tab_closed(s: &mut State, tab: TabId) {
+    s.passwords.save_prompts.retain(|p| p.tab != tab);
+}
+
+/// The user answered a prompt from window `win`: `save`, `never` or `dismiss`.
+pub fn save_answer(s: &mut State, win: WinId, id: &str, action: &str) -> anyhow::Result<()> {
+    let Some(i) = s
+        .passwords
+        .save_prompts
+        .iter()
+        .position(|p| p.id == id && s.tabs.get(&p.tab).map(|t| t.win) == Some(win))
+    else {
+        return Ok(()); // expired or not ours
+    };
+    // The prompt (and its password) is dropped on every answer.
+    let prompt = s.passwords.save_prompts.remove(i);
+    s.mark_dirty(win);
+    match action {
+        "dismiss" => {}
+        "never" => {
+            let list = &mut s.settings.proton_pass_never_save;
+            if !list.contains(&prompt.site) {
+                list.push(prompt.site.clone());
+                list.sort();
+            }
+            s.save_settings();
+            let site = prompt.site.clone();
+            s.passwords.save_prompts.retain(|p| p.site != site);
+            toast(
+                s,
+                win,
+                &format!("Will not ask to save passwords for {site}"),
+            );
+        }
+        "save" => start_save(s, win, prompt),
+        _ => anyhow::bail!("unknown action"),
+    }
+    Ok(())
+}
+
+fn start_save(s: &mut State, win: WinId, prompt: SavePrompt) {
+    if !s.settings.proton_pass {
+        return;
+    }
+    let Some(cli) = resolve_cli(&s.settings.proton_pass_cli) else {
+        toast(s, win, "pass-cli not found");
+        return;
+    };
+    let vault = s.settings.proton_pass_vault.clone();
+    std::thread::spawn(move || {
+        let result = std::panic::catch_unwind(|| save_login(&cli, &vault, &prompt))
+            .unwrap_or_else(|_| Err("internal error".into()));
+        engine::post_ui(move || {
+            super::with_state(|s| finish_save(s, win, result));
+        });
+    });
+}
+
+fn save_login(cli: &PathBuf, vault: &str, p: &SavePrompt) -> Result<(), String> {
+    let share = if vault.is_empty() {
+        let out = run_cli(cli, &["vault", "list", "--output", "json"])?;
+        passcli::parse_vaults(&out)
+            .into_iter()
+            .next()
+            .ok_or("no vault found")?
+    } else {
+        vault.to_string()
+    };
+    let template = passcli::login_template(
+        &p.site,
+        &p.username,
+        &p.password,
+        std::slice::from_ref(&p.origin),
+    );
+    run_cli_with_stdin(
+        cli,
+        &[
+            "item",
+            "create",
+            "login",
+            "--share-id",
+            &share,
+            "--from-template",
+            "-",
+        ],
+        Some(template.into_bytes()),
+    )
+    .map(|_| ())
+    // Defence in depth: a message must never repeat the password.
+    .map_err(|e| e.replace(&p.password, "***"))
+}
+
+fn finish_save(s: &mut State, win: WinId, result: Result<(), String>) {
+    match result {
+        Ok(()) => {
+            toast(s, win, "Saved to Proton Pass");
+            // Reload the cache; results of a refresh already running are stale.
+            s.passwords.generation += 1;
+            s.passwords.refreshing = false;
+            refresh(s, true);
+        }
+        Err(e) => {
+            tracing::warn!("Proton Pass: saving a login failed: {e}");
+            toast(s, win, "Proton Pass: could not save the login");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,7 +1061,21 @@ mod tests {
             title: "A&B".into(),
             username: "bob".into(),
             urls: vec![],
+            has_totp: true,
         };
         assert_eq!(menu_label(&l), "bob \u{2014} A&&B");
+        assert_eq!(totp_label(&l), "2FA code \u{2014} bob");
+    }
+
+    #[test]
+    fn otp_script_splices_only_safe_codes() {
+        assert!(otp_script("123456").ends_with("(\"123456\");"));
+        assert!(otp_script("1\");alert(1);//").ends_with("(\"\");"));
+    }
+
+    #[test]
+    fn ids_are_distinct() {
+        assert_ne!(random_id(1), random_id(2));
+        assert_eq!(random_id(1).len(), 16);
     }
 }

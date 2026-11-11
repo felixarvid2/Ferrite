@@ -239,6 +239,243 @@ Network traffic went through an HTTPS-intercepting proxy.
   input/change events; no fill on a non-matching host, none when the page
   navigated while pass-cli ran; not-logged-in and missing-binary states show
   in Settings; web pages cannot call the pass API.
+- Not verified: the real pass-cli JSON (the parsers accept the shapes seen in
+  its source and docs; `item totp --output json` is documented as
+  `{"<field>": "<code>"}`, a login's own secret is the field `totp`),
+  React-heavy login pages, logins inside iframes (only the main frame is
+  filled), a real Proton account for saving.
+- Matching: same host or a subdomain of the saved URL's host (ports ignored);
+  an https login is never filled into an http page. The fill runs in the
+  page, so the page can read the password once filled (as with any autofill).
+
+#### Saving logins ("Save password to Proton Pass?")
+
+- After a sign-in, a bar in the UI strip asks "Save password for <site> to
+  Proton Pass?" with Save, Never for this site and Not now. It shows the
+  username, never the password. Settings > Passwords: "Offer to save
+  passwords" (default on), the vault for new logins (default: the first
+  vault), and the never-list with remove buttons.
+- Capture: per content browser, a script in the isolated world `ferrite-pass`
+  (`Page.addScriptToEvaluateOnNewDocument` with `worldName`) listens for form
+  `submit`, Enter in a password field and clicks on a submit-like button near
+  a password field (SPA logins; trusted events only), and reports
+  `{username, password}` through a `Runtime.addBinding` function that exists
+  only in that world (`executionContextName`). The page cannot see, call or
+  spoof it: verified with `typeof window.__ferritePassSave` and a call from
+  the page's own script (undefined / throws, no prompt). It runs in the top
+  frame only (`window !== top`), so an iframe's form never prompts; the site
+  is the main frame's URL as read by Rust, never part of the payload. It needs
+  `Runtime.enable` (bindingCalled is not delivered otherwise).
+- Registration happens once per browser session (not per navigation): when
+  the tab's browser is created (`tabs.rs` `on_browser_created`), and on every
+  existing tab when the setting is switched on. It must come before the first
+  navigation: a DevTools session whose first message goes out while a
+  navigation starts is not ready in time (measured: the answer only arrives
+  after the held request is released, about 1 s), so holding the request does
+  not help. Instead the deferred first navigation waits (at most 1 s) until
+  the registration is confirmed (`tabs.rs` `deferred_start_after`); without
+  that wait 1 of 20 fresh starts missed its first page, with it 0 of 30. The
+  `on_before_browse` call is only a backstop for browsers that
+  were missed and covers the page after the one being loaded. New web tabs
+  also start on about:blank when ad blocking **or** login capture is on
+  (`tabs.rs` `deferred`). Switching the offer off removes script and binding
+  (and `Runtime.disable`).
+- Costs: `Runtime.enable` stays on for every content browser while the feature
+  is on (pages can detect it; execution-context events reach the browser
+  process and are ignored). The capture script also runs in private windows;
+  the payload is dropped in Rust there (logged at debug level). The prompt
+  appears on submit, so it also appears after a failed login attempt.
+- Not offered: private windows, non-http(s) pages, sites on the never-list,
+  when a cached login for the site already has the same username (there is no
+  update/change-password flow in v1), empty or oversized values (password over
+  1000 chars, username over 500). Two or more filled password fields: the last
+  one is used (sign-up forms save the new account; change-password forms the
+  new password).
+- The password lives only in Rust memory (`SavePrompt`), is dropped on any
+  answer, after 2 minutes, when the tab closes or when the feature is turned
+  off; the UI gets `{id, site, username}`. One prompt per tab (a newer submit
+  replaces it). The `pass_save_answer` command is UI-only and checks that the
+  prompt belongs to the caller's window.
+- Saving runs `pass-cli item create login --share-id <vault> --from-template -`
+  on a background thread with the JSON on stdin (argv is readable in /proc).
+  The title is the site, the URL the page origin, and an email-looking name is
+  stored as `email`, otherwise `username`. Messages and logs never contain the
+  password (failure toast is generic; pass-cli's first stderr line is logged
+  with the password redacted). The cache refreshes afterwards.
+- Verified with the fake pass-cli (stdin JSON byte-checked with quotes,
+  backslash, `</script>`, non-ASCII and shell metacharacters; argv has no
+  password or username; failure path; "Never" and the disabled setting
+  suppress the prompt). Rust memory is not zeroed on drop (a freed `String`
+  may linger); not fixed.
+
+#### 2FA codes
+
+- Logins with a TOTP secret (the login's `totp_uri` or an extra field of kind
+  totp; only the fact is cached, never the secret) get an extra menu item
+  "2FA code - username". It runs `pass-cli item totp --share-id S --item-id I
+  --output json`, checks the page URL again like the fill, and types the code
+  into the first visible input that looks like an OTP field
+  (`autocomplete=one-time-code`, a name/id/label such as otp/2fa/code/token,
+  or `inputmode=numeric` with maxlength 6 to 8; split one-digit boxes are not
+  handled). Otherwise the code is copied to the clipboard, a toast says "2FA
+  code copied", and the clipboard is cleared after 30 s if it still holds the
+  code. The clipboard is only written after the user picked that menu item.
+- After a password fill nothing else happens: pick the 2FA item when the code
+  page shows. A login with several TOTP fields gets the field named `totp`,
+  else the first by name.
+
+### Ad blocking (scriptlets and YouTube rules)
+
+- Local mock YouTube watch page (rules rewritten from youtube.com to
+  youtube.localhost): inline `ytInitialPlayerResponse.adPlacements` became
+  `undefined`; `JSON.parse` output lost `adPlacements` and `playerAds`; the XHR
+  player response lost `adPlacements` through `adSlots`; the fetch response had
+  `adPlacements`/`adSlots` renamed to `no_ads`. With blocking off, all of these
+  were unchanged.
+- Scriptlet injection timing checked for: startup tab, new tabs, same-site and
+  cross-site navigation, server redirect to another host, and reload.
+- Real sites load with blocking on: CNN, Reddit, GitHub, BBC, Wikipedia, Vimeo.
+- Unit tests: trusted vs untrusted lists, aliases, json-prune, CSS. An ignored
+  test checks that the real lists produce all YouTube rule families (script
+  about 78 KB for youtube.com watch pages; generic CSS about 17 KB on news sites).
+
+### Sessions and crashes
+
+- Quit with `Ctrl+Shift+Q`, then restart: tabs are restored.
+- `kill -9`, then restart: tabs are restored.
+
+### Tab sleeping
+
+- An idle tab frees its browser and wakes when selected.
+
+### Internal pages
+
+- History, downloads, settings and new tab pages render.
+
+### Look and window frame
+
+- Redesigned toolbar: the active tab merges into the toolbar, separators between
+  inactive tabs, coloured letter icons for sites without a favicon, the address
+  bar shows the site's domain in full ink when not focused, purple tint in
+  private windows. Internal pages share a design system with a sidebar, toggle
+  switches and day-grouped history; checked in dark and light themes.
+- Frameless window by default: the tab strip is the title bar (CSS
+  `app-region: drag`, reported through CEF's drag handler and applied with
+  `Window::set_draggable_regions`). Dragging the strip moved the window under
+  openbox; minimize/maximize/close buttons are drawn by the UI.
+  Settings > Appearance > "Use system title bar" (`system_titlebar`) turns the
+  desktop's title bar back on (takes effect for new windows).
+- Resizing: dragging the bottom-right corner (1280x860 -> 1130x760) and the
+  left edge resized the window under openbox. Frameless windows keep a 4 px
+  frame because web content is a native child window that would swallow edge
+  clicks. (Before this fix windows were not resizable at all: cef-rs defaults
+  `WindowDelegate::can_resize/can_maximize/can_minimize` to false.)
+- Maximized and fullscreen windows drop the resize frame (content reaches the
+  screen edge; checked by screenshot), and it returns when restored. F11 and
+  HTML5 video fullscreen were checked; in HTML5 fullscreen the video fills the
+  screen and the UI strip is hidden.
+- "Use system title bar": a new window gets the window manager's title bar and
+  no Ferrite window buttons (checked under openbox).
+- Not checked: GNOME/KDE window managers, Wayland.
+
+### Vertical tabs (default layout)
+
+- Default since the design review scored it 9/10 (top tabs: 8.7/10). Settings >
+  Appearance > "Vertical tabs" switches back to tabs above the toolbar (new
+  windows; existing profiles keep their saved choice). Tabs
+  move to a 240 px sidebar left of the content (a second UI view running
+  `chrome.html#side` against the same API); the top strip keeps the window
+  buttons and drag area. Checked: layout after restart with restored tabs,
+  switching tabs and opening a new tab by mouse in the sidebar.
+- Not checked: drag-reordering in the sidebar, many tabs (scrolling).
+
+### Packaging
+
+- `scripts/package.sh --deb-only` built `dist/ferrite_0.1.0_amd64.deb` (134 MB).
+  `apt install ./dist/...deb` resolved its dependencies and installed it on
+  Ubuntu 24.04. Checks: `/opt/ferrite/chrome-sandbox` is `-rwsr-xr-x root`,
+  `x-www-browser` points to `/usr/bin/ferrite`, the desktop file passes
+  `desktop-file-validate` and is in the MIME cache for http/https, and the
+  icons are installed. `ferrite` started from `/usr/bin` and opened a window
+  with `WM_CLASS "ferrite", "Ferrite"` (matching `StartupWMClass`).
+- WM_CLASS is set with Xlib: cef-rs loses strings written to
+  `LinuxWindowProperties`, and Chromium's `--class` switch does not reach
+  Views windows.
+- AppImage: `scripts/package.sh --appimage-only` built a 170 MB
+  `Ferrite-0.1.0-x86_64.AppImage`; it started and opened a window (run with
+  `APPIMAGE_EXTRACT_AND_RUN=1`, since the container has no FUSE).
+- Not tested: the AppArmor profile (no AppArmor in the
+  container), the sandbox from the installed package (tests run as root with
+  `--no-sandbox`), and `xdg-settings` on a real desktop.
+
+### Release bundle
+
+- The release bundle in `dist/` runs standalone with the embedded UI.
+
+### Media playback
+
+- WebM (VP9) video plays: 960x540, `currentTime` advances (MDN's `flower.webm`
+  served locally); MP3 audio plays.
+- MP4 (H.264/AAC) does not: `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`, as expected
+  for CEF builds without proprietary codecs (see Known limitations).
+
+### Web platform probe
+
+- WebAssembly: yes. IndexedDB: yes. localStorage: yes. Service Worker API: yes.
+- WebSocket (wss echo): yes. RTCPeerConnection: yes. MediaSource: yes.
+- VP9, AV1 and Opus playback: `canPlayType` returns "probably".
+
+## Not verified
+
+- YouTube video: www.youtube.com redirected to Google's "unusual traffic" page
+  for the test container's datacenter IP. Through an embed iframe the YouTube
+  player loaded and rendered but answered "Video unavailable" (server-side
+  refusal for this IP). Opening an `/embed/` URL directly shows "Error 153",
+  which YouTube shows in any browser without an embedding page. YouTube serves
+  VP9/AV1 + Opus, which play in Ferrite (see Media playback).
+- Gmail and Google Docs: only the sign-in page was reached (no account).
+- Login and OAuth flows: not tested end to end.
+- Hardware acceleration and WebGL on a real GPU. WebGL was unavailable in the
+  container (no GPU; the SwiftShader WebGL fallback is off by default).
+- Webcam and microphone, WebRTC calls, notifications display, picture-in-picture,
+  PDF viewer, printing, drag and drop of files, IME input, HiDPI, Wayland,
+  multi-monitor.
+- Single-instance relaunch forwarding (implemented, not tested).
+- Downloads "ask where" (uses CEF's dialog).
+- Multiple profiles: only through `--profile`; no UI.
+
+## Known limitations
+
+### Media and DRM
+
+- No H.264 or AAC in the standard CEF build (`canPlayType` returns "" for
+  `avc1` and `mp4a`). Sites that serve only H.264 (some news players,
+  X/Twitter video) will not play; YouTube serves VP9/AV1 and plays.
+  Without building Chromium: `scripts/setup-cef.sh --codecs` downloads a
+  third-party codec build (obs-rust, CEF 156.0.8, sha256-pinned) and installs
+  it into `~/.local/share/cef-codecs`; it is an older Chromium patch release.
+  Building it yourself: `scripts/build-cef-codecs.sh` (about 120 GB of disk).
+  H.264/AAC playback was verified with the third-party build. See
+  docs/CODECS.md. `ferrite://about/` shows which codecs a build supports.
+- Widevine DRM works in the standard build: Chromium's component updater
+  downloads the Widevine CDM into the profile (`<profile>/cef/WidevineCdm/`)
+  on first run; it is used after a restart. Verified: Widevine-encrypted VP9
+  test content (Shaka demo assets) played. Services that require H.264 with
+  Widevine, or hardware-backed DRM (Netflix in HD), need the codec build and
+  may still refuse a non-Chrome browser; Netflix/Spotify/Disney+ were not
+  tested (no accounts).
+
+### Proton Pass
+
+- Fills logins from Proton Pass through Proton's official `pass-cli`
+  (Settings > Passwords; run `pass-cli login` once; needs a Proton Pass plan
+  with CLI access). The browser extension cannot run in CEF.
+- Verified with a fake `pass-cli` only (no Proton account in the dev
+  container): the key button appears on a matching site, the native menu
+  lists "username — title", choosing it fills username and password and fires
+  input/change events; no fill on a non-matching host, none when the page
+  navigated while pass-cli ran; not-logged-in and missing-binary states show
+  in Settings; web pages cannot call the pass API.
 - Not verified: the real pass-cli JSON (the parser accepts both plausible
   shapes), React-heavy login pages, logins inside iframes (only the main frame
   is filled), TOTP codes (not implemented), saving new logins (not
@@ -264,8 +501,8 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 ### Not implemented
 
-- A built-in password manager (saving passwords). Ferrite fills from Proton
-  Pass only; it does not save new passwords.
+- A built-in password manager. Ferrite fills from and saves to Proton Pass
+  only; there is no update/change-password flow yet.
 - Extensions.
 - Spell-check UI.
 - Reader mode.

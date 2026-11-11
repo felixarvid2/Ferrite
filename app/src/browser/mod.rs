@@ -271,6 +271,7 @@ pub fn start() {
     }
     schedule_housekeeping();
     with_state(|s| {
+        passwords::apply_capture_flag(s);
         if s.settings.proton_pass {
             passwords::tick(s);
         }

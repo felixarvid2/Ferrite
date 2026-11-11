@@ -125,8 +125,11 @@ pub fn create_view(s: &mut State, tab: TabId) {
     let mut client = s.content_client.clone();
     let mut delegate = TabViewDelegate::new(tab);
     scheme::allow_internal(&url);
+    // Scripts registered through DevTools (content blocking, login capture)
+    // only reach the first page if the session exists before it loads.
     let deferred = url.starts_with("http")
-        && super::handlers::ADBLOCK.load(std::sync::atomic::Ordering::Relaxed);
+        && (super::handlers::ADBLOCK.load(std::sync::atomic::Ordering::Relaxed)
+            || super::inject::CAPTURE.load(std::sync::atomic::Ordering::Relaxed));
     if deferred {
         DEFERRED_LOAD.with(|d| d.borrow_mut().insert(tab, url.clone()));
     }
@@ -320,6 +323,7 @@ pub fn detach_view(s: &mut State, tab: TabId) {
 }
 
 pub fn tab_closed(s: &mut State, tab: TabId) {
+    super::passwords::tab_closed(s, tab);
     let Some(t) = s.tabs.remove(&tab) else { return };
     let win = t.win;
     let Some(w) = s.windows.get_mut(&win) else {
@@ -528,6 +532,20 @@ pub fn is_deferred(browser_id: i32) -> bool {
 /// The main frame of a content browser finished loading: start a deferred
 /// first navigation.
 pub fn deferred_start(browser: &mut Browser) {
+    deferred_start_after(browser.clone(), 0);
+}
+
+/// Longest the first navigation waits for the login-capture registration.
+const CAPTURE_WAIT_MS: i64 = 1000;
+
+fn deferred_start_after(browser: Browser, waited_ms: i64) {
+    // The capture script must be known to the renderer before the page loads.
+    if waited_ms < CAPTURE_WAIT_MS && super::inject::capture_waiting(browser.identifier()) {
+        crate::engine::post_local_delayed(20, move || {
+            deferred_start_after(browser, waited_ms + 20)
+        });
+        return;
+    }
     let Some(url) = DEFERRED_START.with(|d| d.borrow_mut().remove(&browser.identifier())) else {
         return;
     };
@@ -608,6 +626,9 @@ wrap_browser_view_delegate! {
             let Some(mut browser) = browser.cloned() else { return };
             let tab = self.tab_id;
             deferred_created(tab, &mut browser);
+            // Login capture needs its DevTools session before the first
+            // navigation (see inject::capture_ensure).
+            super::inject::capture_ensure(&mut browser);
             later(move |s| browser_created(s, tab, browser));
         }
 

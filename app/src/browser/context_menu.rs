@@ -38,6 +38,18 @@ pub fn copy_text(text: &str) {
     });
 }
 
+/// Empty the clipboard if it still holds exactly `text` (used for 2FA codes).
+pub fn clear_text_if(text: &str) {
+    CLIPBOARD.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some(cb) = c.as_mut() {
+            if cb.get_text().is_ok_and(|t| t == text) {
+                let _ = cb.clear();
+            }
+        }
+    });
+}
+
 pub fn make_handler() -> ContextMenuHandler {
     ContentContextMenu::new()
 }

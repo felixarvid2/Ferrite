@@ -113,6 +113,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "frameless": !s.settings.system_titlebar,
         "vertical_tabs": w.side_view.is_some(),
         "passwords": active.map_or(0, |t| s.passwords.count_for(&t.url)),
+        "pass_save": passwords::prompt_json(s, w.active),
         "maximized": w.window.as_ref().is_some_and(|w| w.is_maximized() != 0),
     })
 }
@@ -129,6 +130,7 @@ const UI_ONLY: &[&str] = &[
     "permission",
     "password_menu",
     "blocking_menu",
+    "pass_save_answer",
 ];
 
 /// Reject tab ids that belong to another window (or to no tab at all).
@@ -307,6 +309,11 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             Value::Null
         }
         "pass_status" => passwords::status_json(s),
+        "pass_vaults" => passwords::vaults_json(s),
+        "pass_save_answer" => {
+            passwords::save_answer(s, win, arg_str(&args, "id")?, arg_str(&args, "action")?)?;
+            Value::Null
+        }
         "pass_refresh" => {
             passwords::refresh(s, true);
             passwords::status_json(s)

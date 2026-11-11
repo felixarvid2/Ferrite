@@ -536,6 +536,9 @@ wrap_request_handler! {
             }
             if let (true, Some(browser)) = (is_main, browser) {
                 reset_blocked(browser.identifier());
+                if target.starts_with("http") {
+                    super::inject::capture_ensure(browser); // backstop: normally done at creation
+                }
                 super::inject::navigation(browser, &target, super::inject::blocking_script);
             }
             0

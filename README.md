@@ -19,8 +19,8 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 - Private windows use an in-memory profile that is discarded when the last
   private window closes.
 - Tab sleeping unloads idle background tabs to save memory.
-- Proton Pass logins can be filled through Proton's `pass-cli` (Settings >
-  Passwords).
+- Proton Pass logins can be filled, saved after you sign in, and 2FA codes
+  fetched, through Proton's `pass-cli` (Settings > Passwords).
 - Bookmarks and history can be imported from Chrome, Chromium, Brave, Edge, Vivaldi
   and Firefox profiles (Settings > Import). Passwords are not imported.
 - Ad and tracker blocking uses EasyList, EasyPrivacy and uBlock Origin's lists

@@ -10,6 +10,7 @@ async function load() {
     if (input.type === "checkbox") input.checked = !!v; else input.value = String(v);
   }
   renderExceptions();
+  renderNeverSave();
   loadPerms();
   loadPass();
   loadImport();
@@ -26,6 +27,26 @@ function renderExceptions() {
         settings = await api("settings_set", { patch: { adblock_exceptions: sites.filter(x => x !== site) } });
         renderExceptions();
       } }, icon("close")))));
+}
+function renderNeverSave() {
+  const box = document.getElementById("pass-never");
+  const sites = settings.proton_pass_never_save || [];
+  box.replaceChildren(...(sites.length ? [el("div", { class: "row" }, el("div", { class: "grow" }, el("div", { text: "Never offer to save passwords for" }), el("div", { class: "desc", text: "These sites and their subdomains." })))] : []),
+    ...sites.map(site => el("div", { class: "row hoverable" },
+      el("div", { class: "grow" }, el("div", { class: "title", text: site })),
+      el("button", { class: "icon-btn danger", title: "Offer to save again", "aria-label": "Remove " + site, onclick: async () => {
+        settings = await api("settings_set", { patch: { proton_pass_never_save: sites.filter(x => x !== site) } });
+        renderNeverSave();
+      } }, icon("close")))));
+}
+async function loadVaults() {
+  const sel = document.getElementById("pass-vault");
+  let list = [];
+  try { list = await api("pass_vaults"); } catch (_) {}
+  const current = settings ? settings.proton_pass_vault : "";
+  sel.replaceChildren(el("option", { value: "", text: "First vault" }), ...list.map(v => el("option", { value: v.share_id, text: v.name || v.share_id })));
+  if (current && !list.some(v => v.share_id === current)) sel.append(el("option", { value: current, text: current }));
+  sel.value = current;
 }
 async function loadPerms() {
   const perms = await api("permissions_list");
@@ -49,6 +70,7 @@ async function loadPass(refresh) {
   box.style.color = r.status === "error" || r.status === "not_installed" ? "var(--danger)" : "";
   document.getElementById("pass-refresh").disabled = !r.enabled;
   if (r.status === "loading") passTimer = setTimeout(loadPass, 800);
+  loadVaults();
 }
 const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 async function loadImport() {

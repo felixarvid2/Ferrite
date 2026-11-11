@@ -47,6 +47,9 @@
   <div class="card">
     <div class="row"><div class="grow"><div>Proton Pass</div><div class="desc">Show a key button in the address bar on pages you have a login for.</div></div><input type="checkbox" class="switch" data-key="proton_pass"></div>
     <div class="row"><div class="grow"><div>pass-cli path</div><div class="desc">Leave empty to look in PATH, then ~/.local/bin.</div></div><input data-key="proton_pass_cli" style="width:280px" placeholder="auto" spellcheck="false"></div>
+    <div class="row"><div class="grow"><div>Offer to save passwords</div><div class="desc">After you sign in on a site, ask whether to save the login to Proton Pass. Not in private windows.</div></div><input type="checkbox" class="switch" data-key="proton_pass_offer_save"></div>
+    <div class="row"><div class="grow"><div>Vault for new logins</div><div class="desc">Needs a refresh first to list your vaults.</div></div><select data-key="proton_pass_vault" id="pass-vault"><option value="">First vault</option></select></div>
+    <div id="pass-never"></div>
     <div class="row"><div class="grow"><div id="pass-status">&nbsp;</div><div class="desc">Install pass-cli and run <code>pass-cli login</code> once (needs a Proton Pass plan with CLI access).</div></div><button class="btn sm" id="pass-refresh">Refresh</button></div>
   </div>
   <h2>Import</h2>
