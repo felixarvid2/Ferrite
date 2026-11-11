@@ -102,9 +102,11 @@ Network traffic went through an HTTPS-intercepting proxy.
   no Ferrite window buttons (checked under openbox).
 - Not checked: GNOME/KDE window managers, Wayland.
 
-### Vertical tabs (optional layout)
+### Vertical tabs (default layout)
 
-- Settings > Appearance > "Vertical tabs" (`vertical_tabs`, new windows): tabs
+- Default since the design review scored it 9/10 (top tabs: 8.7/10). Settings >
+  Appearance > "Vertical tabs" switches back to tabs above the toolbar (new
+  windows; existing profiles keep their saved choice). Tabs
   move to a 240 px sidebar left of the content (a second UI view running
   `chrome.html#side` against the same API); the top strip keeps the window
   buttons and drag area. Checked: layout after restart with restored tabs,
