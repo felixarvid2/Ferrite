@@ -394,6 +394,7 @@ wrap_life_span_handler! {
         fn on_before_close(&self, browser: Option<&mut Browser>) {
             let browser_id = id_of(&browser);
             super::inject::closed(browser_id);
+            super::mcp::browser_gone(browser_id);
             if let Ok(mut g) = BLOCKED.lock() {
                 if let Some(m) = g.as_mut() {
                     m.remove(&browser_id);
@@ -431,6 +432,9 @@ wrap_load_handler! {
             }
             with_tab(id_of(&browser), move |s, tab| {
                 if let Some(t) = s.tabs.get_mut(&tab) {
+                    if is_loading != 0 && !t.loading {
+                        t.load_seq += 1;
+                    }
                     t.loading = is_loading != 0;
                     t.can_back = can_go_back != 0;
                     t.can_forward = can_go_forward != 0;
@@ -465,7 +469,7 @@ wrap_load_handler! {
             with_tab(id_of(&browser), move |s, tab| {
                 let Some(t) = s.tabs.get(&tab) else { return };
                 let (win, title) = (t.win, t.title.clone());
-                if http_status_code < 400 && !s.is_private(win) {
+                if http_status_code < 400 && !s.is_ephemeral(win) {
                     if let Err(err) = s.db.record_visit(&url, &title, ferrite_core::now_ms()) {
                         tracing::warn!("recording history failed: {err:#}");
                     }
@@ -534,6 +538,10 @@ wrap_request_handler! {
                 tracing::warn!("blocked navigation from {current:?} to internal page {target}");
                 return 1;
             }
+            if is_main && !super::mcp::navigation_ok(id_of(&browser), &target) {
+                tracing::warn!("blocked navigation of an AI-controlled tab to {target}");
+                return 1;
+            }
             if let (true, Some(browser)) = (is_main, browser) {
                 reset_blocked(browser.identifier());
                 if target.starts_with("http") {
@@ -565,7 +573,12 @@ wrap_request_handler! {
                 let browser_id = id_of(&browser);
                 later(move |s| {
                     let private = s.win_of_browser(browser_id).is_some_and(|w| s.is_private(w));
-                    window::open_window(s, window::WindowInit { private, ..window::WindowInit::normal(vec![url]) });
+                    let owned = s.tab_of_browser(browser_id).is_some_and(|t| s.ai_control(t) == ferrite_mcp::policy::Control::Own);
+                    let ai = owned && s.win_of_browser(browser_id).is_some_and(|w| s.windows.get(&w).is_some_and(|w| w.ai));
+                    let win = window::open_window(s, window::WindowInit { private, ai, ..window::WindowInit::normal(vec![url]) });
+                    if let (true, Some(win)) = (ai, win) {
+                        super::mcp::own_all_tabs(s, win);
+                    }
                 });
                 return 1;
             } else {
@@ -573,7 +586,8 @@ wrap_request_handler! {
             };
             with_tab(id_of(&browser), move |s, opener| {
                 let Some(win) = s.tabs.get(&opener).map(|t| t.win) else { return };
-                tabs::new_tab(s, win, &url, tabs::NewTab { background, opener: Some(opener), ..Default::default() });
+                let ai = s.ai_control(opener) == ferrite_mcp::policy::Control::Own;
+                tabs::new_tab(s, win, &url, tabs::NewTab { background, opener: Some(opener), ai, ..Default::default() });
             });
             1
         }

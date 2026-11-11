@@ -53,6 +53,13 @@
     <div id="pass-never"></div>
     <div class="row"><div class="grow"><div id="pass-status">&nbsp;</div><div class="desc">Install pass-cli and run <code>pass-cli login</code> once (needs a Proton Pass plan with CLI access).</div></div><button class="btn sm" id="pass-refresh">Refresh</button></div>
   </div>
+  <h2>AI control (MCP)</h2>
+  <p class="section-desc">Let an AI client such as Claude Desktop or Claude Code drive Ferrite through the Model Context Protocol. The AI works in its own AI window, an isolated context without your cookies or logins, and in tabs you hand over from the tab menu (&ldquo;Let AI control this tab&rdquo;). It can never open Ferrite&rsquo;s own pages or settings, downloads or Proton Pass. A bar and a badge always show which tabs it controls, and Stop takes control back at once.</p>
+  <div class="card">
+    <div class="row"><div class="grow"><div>Allow AI control</div><div class="desc">Starts a local socket (not a network port) that the <code>ferrite-mcp</code> program connects to. Only your user can use it.</div></div><input type="checkbox" class="switch" data-key="mcp_enabled"></div>
+    <div class="row"><div class="grow"><div>Allow running JavaScript</div><div class="desc">Adds the <code>evaluate</code> tool, which runs any script in a page the AI controls. A script can read everything on that page, including what you typed or filled in. Leave off unless you need it.</div></div><input type="checkbox" class="switch" data-key="mcp_allow_evaluate"></div>
+    <div class="row" style="flex-direction:column;align-items:stretch;gap:8px"><div id="mcp-status">&nbsp;</div><div class="desc">Add this to the client&rsquo;s MCP configuration (Claude Desktop: <code>claude_desktop_config.json</code>; Claude Code: <code>.mcp.json</code> or <code>claude mcp add</code>):</div><pre id="mcp-config" style="margin:0;padding:10px 12px;border-radius:8px;background:var(--field,#2b2d33);overflow:auto;user-select:text;font-size:12px"></pre><div class="desc" id="mcp-socket"></div></div>
+  </div>
   <h2>Import</h2>
   <p class="section-desc">Bring bookmarks and history from other browsers on this computer. Passwords are not imported (the other browser encrypts them).</p>
   <div class="card" id="import-sources"></div>

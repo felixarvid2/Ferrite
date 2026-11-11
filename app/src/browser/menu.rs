@@ -142,6 +142,17 @@ pub fn show_tab_menu(
         }
     }
     model.set_enabled(107, (!w.closed_tabs.is_empty()) as i32);
+    // "Let AI control this tab" only while AI control is on and the tab can
+    // be handed over; a controlled tab offers to take it back.
+    if let Some(controlled) = super::mcp::menu_state(s, tab) {
+        model.add_separator();
+        let label = if controlled {
+            "Take back control from AI"
+        } else {
+            "Let AI control this tab"
+        };
+        model.add_item(108, Some(&cef_str(label)));
+    }
     let mut point = Point { x, y };
     match (from_side, &w.side_view) {
         (true, Some(side)) => side.convert_point_to_screen(Some(&mut point)),
@@ -180,6 +191,7 @@ fn tab_menu_command(s: &mut super::State, win: WinId, tab: super::TabId, id: i32
             }
         }
         107 => tabs::reopen_closed(s, win),
+        108 => super::mcp::toggle(s, tab),
         _ => {}
     }
 }

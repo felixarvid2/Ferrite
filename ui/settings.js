@@ -13,6 +13,7 @@ async function load() {
   renderNeverSave();
   loadPerms();
   loadPass();
+  loadMcp();
   loadImport();
   const a = await api("about");
   document.getElementById("about").textContent = `Ferrite ${a.ferrite} · Chromium ${a.chromium} · CEF ${a.cef}` + (a.sandbox ? "" : " · sandbox disabled");
@@ -72,6 +73,16 @@ async function loadPass(refresh) {
   if (r.status === "loading") passTimer = setTimeout(loadPass, 800);
   loadVaults();
 }
+async function loadMcp() {
+  let r;
+  try { r = await api("mcp_status"); } catch (e) { return; }
+  const st = document.getElementById("mcp-status");
+  st.textContent = !r.enabled ? "Off" : r.listening ? `On: waiting for an AI client (${r.controlled_tabs} controlled tab${r.controlled_tabs === 1 ? "" : "s"})` : "Error: " + (r.error || "not listening");
+  st.style.color = r.enabled && !r.listening ? "var(--danger)" : "";
+  const args = r.profile && r.profile !== "default" ? ["--profile=" + r.profile] : [];
+  document.getElementById("mcp-config").textContent = JSON.stringify({ mcpServers: { ferrite: { command: r.command, args } } }, null, 2);
+  document.getElementById("mcp-socket").textContent = "Socket: " + r.socket;
+}
 const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 async function loadImport() {
   const box = document.getElementById("import-sources");
@@ -123,6 +134,7 @@ for (const input of document.querySelectorAll("[data-key]")) {
     try { settings = await api("settings_set", { patch: { [input.dataset.key]: value } }); }
     catch (e) { alert(e.message); load(); }
     if (input.dataset.key.startsWith("proton_pass")) loadPass();
+    if (input.dataset.key.startsWith("mcp_")) loadMcp();
     if (input.dataset.key === "theme") { try { localStorage.setItem("ferrite-theme", value); } catch (_) {} location.reload(); }
   });
 }

@@ -29,6 +29,12 @@ needed, otherwise xdotool focus fails), isolated `FERRITE_DATA_DIR` (fresh temp 
 `FERRITE_UI_DIR=ui` (UI edits need no rebuild, only reload), `--no-sandbox` (root in containers).
 Rust changes need `cargo build` first; UI-only changes (`ui/`) do not.
 
+MCP control has its own end-to-end test: `scripts/mcp-e2e.py` (display :92, port 9492, page server on
+127.0.0.1:8792, ~4 minutes because one step waits for tab sleeping). It starts Ferrite itself with a fresh
+profile, runs the `ferrite-mcp` binary as a stdio subprocess and prints PASS/FAIL per check, screenshots in
+`$MCP_E2E_OUT` (default `/tmp/mcp-e2e`). Build first (`cargo build --release`; the script defaults to
+`target/release`). It hands tabs over through the real native tab menu (xdotool Up+Return).
+
 ## Recon, then act, then assert
 
 1. Recon: `ui.js "api('state')"` (tabs, active id, `nav.url`, back/forward, find, zoom, security) and

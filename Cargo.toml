@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core", "app"]
+members = ["core", "app", "mcp"]
 exclude = ["android/rust"]
 
 [workspace.package]

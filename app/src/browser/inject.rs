@@ -22,8 +22,13 @@
 //! logins through a `Runtime.addBinding` function that exists only in that
 //! world. [`evaluate`] runs one expression in the page for the 2FA fill.
 //!
+//! DevTools calls go through the shared layer in [`super::cdp`] (one id
+//! counter, one observer per browser, answers routed to the call that sent
+//! them).
+//!
 //! Everything here runs on the CEF UI thread, except [`hold`] (IO thread).
 
+use super::cdp;
 use crate::engine::task::{post_ui_delayed, SendBox};
 use cef::*;
 use std::cell::RefCell;
@@ -100,16 +105,14 @@ struct Entry {
     host: String,
     /// Identifier of the registered script, once CDP has answered.
     identifier: Option<String>,
-    /// Message id of the add call still waiting for its identifier.
-    pending: Option<i32>,
-    /// Keeps the DevTools observer registered while the browser lives.
-    _observer: Option<Registration>,
+    /// Token of the add call still waiting for its identifier.
+    pending: Option<u64>,
     /// Drop the about:blank history entry once the first page commits.
     reset_history: bool,
     /// Capture script and binding were sent for this browser.
     capture: bool,
-    /// Message id of the capture script's add call still waiting for its identifier.
-    capture_pending: Option<i32>,
+    /// Token of the capture script's add call still waiting for its identifier.
+    capture_pending: Option<u64>,
     capture_identifier: Option<String>,
 }
 
@@ -126,7 +129,6 @@ pub fn committed(browser: &mut Browser, url: &str) {
     if reset {
         send(
             browser,
-            next_id(),
             "Page.resetNavigationHistory",
             serde_json::json!({}),
         );
@@ -135,29 +137,16 @@ pub fn committed(browser: &mut Browser, url: &str) {
 
 thread_local! {
     static ENTRIES: RefCell<HashMap<i32, Entry>> = RefCell::new(HashMap::new());
-    static NEXT_ID: std::cell::Cell<i32> = const { std::cell::Cell::new(1_000_000) };
+    static TOKEN: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-pub fn next_id() -> i32 {
-    NEXT_ID.with(|n| {
-        let id = n.get();
-        n.set(id.wrapping_add(1).max(1_000_000));
-        id
-    })
-}
-
-fn send(browser: &mut Browser, id: i32, method: &str, params: serde_json::Value) -> bool {
-    let Some(host) = browser.host() else {
-        return false;
-    };
-    let msg = serde_json::json!({ "id": id, "method": method, "params": params });
-    host.send_dev_tools_message(Some(msg.to_string().as_bytes())) != 0
+fn send(browser: &mut Browser, method: &str, params: serde_json::Value) -> Option<i32> {
+    cdp::send(browser, method, params)
 }
 
 fn remove(browser: &mut Browser, identifier: &str) {
     send(
         browser,
-        next_id(),
         "Page.removeScriptToEvaluateOnNewDocument",
         serde_json::json!({ "identifier": identifier }),
     );
@@ -193,7 +182,7 @@ pub fn navigation(
         return;
     }
     // Drop the old registration (or forget a pending one: its answer is
-    // removed when it arrives, see on_result).
+    // removed when it arrives, see add_done).
     let old = ENTRIES.with(|e| {
         let mut e = e.borrow_mut();
         let en = e.entry(browser_id).or_default();
@@ -208,22 +197,80 @@ pub fn navigation(
         return;
     }
     let Some(body) = script_for(url) else { return };
-    ensure_observer(browser);
-    let id = next_id();
-    let ok = send(
+    // Ids are not known before the call is sent; the reply compares against
+    // the entry's `pending` marker, a per-call token.
+    let token = TOKEN.with(|t| {
+        let n = t.get() + 1;
+        t.set(n);
+        n
+    });
+    ENTRIES.with(|e| {
+        if let Some(en) = e.borrow_mut().get_mut(&browser_id) {
+            en.host = host.clone();
+            en.pending = Some(token);
+        }
+    });
+    let sent = cdp::request(
         browser,
-        id,
         "Page.addScriptToEvaluateOnNewDocument",
         serde_json::json!({ "source": guarded(&host, &body) }),
+        cdp::DEFAULT_TIMEOUT_MS,
+        Box::new(move |browser, res| add_done(browser_id, token, browser, res)),
     );
-    if ok {
+    if sent.is_some() {
         close_gate(browser_id);
+    } else {
         ENTRIES.with(|e| {
             if let Some(en) = e.borrow_mut().get_mut(&browser_id) {
-                en.host = host;
-                en.pending = Some(id);
+                en.host.clear();
+                en.pending = None;
             }
         });
+    }
+}
+
+/// The registration of the content-blocking script was answered. `token` is
+/// still current: remember the identifier. Otherwise the registration was
+/// superseded (another navigation, blocking switched off): remove it.
+fn add_done(browser_id: i32, token: u64, browser: Option<&mut Browser>, res: cdp::CdpResult) {
+    let current = ENTRIES.with(|e| {
+        e.borrow()
+            .get(&browser_id)
+            .is_some_and(|en| en.pending == Some(token))
+    });
+    if current {
+        open_gate(browser_id, None);
+    }
+    let identifier = match res {
+        Ok(v) => v
+            .get("identifier")
+            .and_then(|i| i.as_str())
+            .map(str::to_string),
+        Err(err) => {
+            tracing::debug!("script registration failed for browser {browser_id}: {err}");
+            None
+        }
+    };
+    let Some(identifier) = identifier else {
+        if current {
+            ENTRIES.with(|e| {
+                if let Some(en) = e.borrow_mut().get_mut(&browser_id) {
+                    en.pending = None;
+                    en.host.clear();
+                }
+            });
+        }
+        return;
+    };
+    if current {
+        ENTRIES.with(|e| {
+            if let Some(en) = e.borrow_mut().get_mut(&browser_id) {
+                en.pending = None;
+                en.identifier = Some(identifier);
+            }
+        });
+    } else if let Some(b) = browser {
+        remove(b, &identifier);
     }
 }
 
@@ -341,31 +388,70 @@ pub fn capture_ensure(browser: &mut Browser) {
         return;
     }
     tracing::debug!("login capture: registering for browser {browser_id}");
-    ensure_observer(browser);
+    cdp::ensure(browser);
     // bindingCalled events are only delivered while Runtime is enabled.
-    send(browser, next_id(), "Runtime.enable", serde_json::json!({}));
+    send(browser, "Runtime.enable", serde_json::json!({}));
     send(
         browser,
-        next_id(),
         "Runtime.addBinding",
         serde_json::json!({ "name": CAPTURE_BINDING, "executionContextName": CAPTURE_WORLD }),
     );
-    let id = next_id();
-    let ok = send(
-        browser,
-        id,
-        "Page.addScriptToEvaluateOnNewDocument",
-        serde_json::json!({ "source": CAPTURE_JS, "worldName": CAPTURE_WORLD }),
-    );
-    if !ok {
-        return;
-    }
+    let token = TOKEN.with(|t| {
+        let n = t.get() + 1;
+        t.set(n);
+        n
+    });
     ENTRIES.with(|e| {
         let mut e = e.borrow_mut();
         let en = e.entry(browser_id).or_default();
         en.capture = true;
-        en.capture_pending = Some(id);
+        en.capture_pending = Some(token);
     });
+    let sent = cdp::request(
+        browser,
+        "Page.addScriptToEvaluateOnNewDocument",
+        serde_json::json!({ "source": CAPTURE_JS, "worldName": CAPTURE_WORLD }),
+        cdp::DEFAULT_TIMEOUT_MS,
+        Box::new(move |browser, res| capture_done(browser_id, token, browser, res)),
+    );
+    if sent.is_none() {
+        ENTRIES.with(|e| {
+            if let Some(en) = e.borrow_mut().get_mut(&browser_id) {
+                en.capture = false;
+                en.capture_pending = None;
+            }
+        });
+    }
+}
+
+/// The capture script's registration was answered.
+fn capture_done(browser_id: i32, token: u64, browser: Option<&mut Browser>, res: cdp::CdpResult) {
+    let identifier = res.ok().and_then(|v| {
+        v.get("identifier")
+            .and_then(|i| i.as_str())
+            .map(str::to_string)
+    });
+    // Remember it only while the registration is still wanted.
+    let keep = ENTRIES.with(|e| {
+        let mut e = e.borrow_mut();
+        let en = e.get_mut(&browser_id)?;
+        if en.capture_pending != Some(token) {
+            return None;
+        }
+        en.capture_pending = None;
+        let keep = CAPTURE.load(std::sync::atomic::Ordering::Relaxed) && en.capture;
+        en.capture_identifier = identifier.clone().filter(|_| keep);
+        Some(keep)
+    });
+    if keep.is_some() {
+        tracing::debug!("login capture: confirmed for browser {browser_id}");
+    }
+    if keep != Some(true) {
+        // Switched off, or superseded, while the call was in flight.
+        if let (Some(identifier), Some(b)) = (identifier, browser) {
+            remove(b, &identifier);
+        }
+    }
 }
 
 /// Is the capture registration of this browser still waiting for DevTools'
@@ -401,26 +487,24 @@ pub fn capture_clear_all(mut browser_of: impl FnMut(i32) -> Option<Browser>) {
         }
         send(
             &mut b,
-            next_id(),
             "Runtime.removeBinding",
             serde_json::json!({ "name": CAPTURE_BINDING }),
         );
-        send(&mut b, next_id(), "Runtime.disable", serde_json::json!({}));
+        send(&mut b, "Runtime.disable", serde_json::json!({}));
     }
 }
 
-/// Run `expression` in the page's main world (main frame). The result
-/// arrives through `passwords::eval_result` under the returned message id.
-pub fn evaluate(browser: &mut Browser, expression: &str) -> Option<i32> {
-    ensure_observer(browser);
-    let id = next_id();
-    send(
+/// Run `expression` in the page's main world (main frame). `reply` gets the
+/// DevTools answer (see [`cdp::request`]).
+pub fn evaluate(browser: &mut Browser, expression: &str, reply: cdp::Reply) -> bool {
+    cdp::request(
         browser,
-        id,
         "Runtime.evaluate",
         serde_json::json!({ "expression": expression, "returnByValue": true }),
+        5000,
+        reply,
     )
-    .then_some(id)
+    .is_some()
 }
 
 /// Content blocking was switched off: remove every registration.
@@ -446,6 +530,7 @@ pub fn clear_all(mut browser_of: impl FnMut(i32) -> Option<Browser>) {
 pub fn closed(browser_id: i32) {
     ENTRIES.with(|e| e.borrow_mut().remove(&browser_id));
     open_gate(browser_id, None);
+    cdp::closed(browser_id);
 }
 
 pub fn attach(browser: &mut Browser) {
@@ -455,104 +540,12 @@ pub fn attach(browser: &mut Browser) {
             .or_default()
             .reset_history = true;
     });
-    ensure_observer(browser);
-}
-
-fn ensure_observer(browser: &mut Browser) {
-    let browser_id = browser.identifier();
-    let has = ENTRIES.with(|e| {
-        e.borrow()
-            .get(&browser_id)
-            .is_some_and(|en| en._observer.is_some())
-    });
-    if has {
-        return;
-    }
-    let Some(host) = browser.host() else { return };
-    let mut observer = InjectObserver::new(browser_id);
-    let reg = host.add_dev_tools_message_observer(Some(&mut observer));
-    send(browser, next_id(), "Page.enable", serde_json::json!({}));
-    // The entry may not exist yet (capture on a browser that was not attached
-    // at creation): dropping the registration would unregister the observer.
-    ENTRIES.with(|e| e.borrow_mut().entry(browser_id).or_default()._observer = reg);
-}
-
-fn on_result(
-    browser: Option<&mut Browser>,
-    browser_id: i32,
-    message_id: i32,
-    success: bool,
-    result: &[u8],
-) {
-    if super::passwords::eval_result(message_id, success, result) {
-        return;
-    }
-    let identifier = serde_json::from_slice::<serde_json::Value>(result)
-        .ok()
-        .and_then(|v| {
-            v.get("identifier")
-                .and_then(|i| i.as_str())
-                .map(str::to_string)
-        });
-    // The capture script's registration: remember its identifier. It never
-    // holds requests, so the content-blocking gate is not involved.
-    let capture = ENTRIES.with(|e| {
-        let mut e = e.borrow_mut();
-        let en = e.get_mut(&browser_id)?;
-        if en.capture_pending != Some(message_id) {
-            return None;
-        }
-        en.capture_pending = None;
-        en.capture_identifier = identifier.clone().filter(|_| en.capture);
-        Some(())
-    });
-    if capture.is_some() {
-        tracing::debug!("login capture: confirmed for browser {browser_id}");
-        if !CAPTURE.load(std::sync::atomic::Ordering::Relaxed) {
-            // Switched off while the call was in flight.
-            if let (Some(identifier), Some(b)) = (identifier, browser) {
-                remove(b, &identifier);
-            }
-        }
-        return;
-    }
-    let was_pending = ENTRIES.with(|e| {
-        e.borrow()
-            .get(&browser_id)
-            .is_some_and(|en| en.pending == Some(message_id))
-    });
-    if was_pending {
-        open_gate(browser_id, None);
-    }
-    if !success {
-        tracing::debug!(
-            "devtools call {message_id} failed: {}",
-            String::from_utf8_lossy(result)
-        );
-    }
-    let Some(identifier) = identifier else { return };
-    // Ours and still current: remember it. Otherwise (superseded add) remove.
-    let current = ENTRIES.with(|e| {
-        let mut e = e.borrow_mut();
-        match e.get_mut(&browser_id) {
-            Some(en) if en.pending == Some(message_id) => {
-                en.pending = None;
-                en.identifier = Some(identifier.clone());
-                true
-            }
-            _ => false,
-        }
-    });
-    if !current && message_id >= 1_000_000 {
-        if let Some(b) = browser {
-            remove(b, &identifier);
-        }
-    }
+    cdp::ensure(browser);
 }
 
 /// `Runtime.bindingCalled`: only our binding, only the payload string. The
 /// binding exists only in the isolated world, so the page cannot call it.
-fn on_event(browser: Option<&mut Browser>, method: &str, params: &[u8]) {
+pub(super) fn on_event(browser: Option<&mut Browser>, method: &str, params: &[u8]) {
     if method != "Runtime.bindingCalled" || params.len() > 16 * 1024 {
         return;
     }
@@ -578,31 +571,4 @@ fn on_event(browser: Option<&mut Browser>, method: &str, params: &[u8]) {
     let browser_id = browser.identifier();
     tracing::debug!("login capture reported by browser {browser_id}");
     super::later(move |s| super::passwords::capture(s, browser_id, url, payload));
-}
-
-wrap_dev_tools_message_observer! {
-    struct InjectObserver {
-        browser_id: i32,
-    }
-
-    impl DevToolsMessageObserver {
-        fn on_dev_tools_method_result(
-            &self,
-            browser: Option<&mut Browser>,
-            message_id: ::std::os::raw::c_int,
-            success: ::std::os::raw::c_int,
-            result: Option<&[u8]>,
-        ) {
-            on_result(browser, self.browser_id, message_id, success != 0, result.unwrap_or_default());
-        }
-
-        fn on_dev_tools_event(
-            &self,
-            browser: Option<&mut Browser>,
-            method: Option<&CefString>,
-            params: Option<&[u8]>,
-        ) {
-            on_event(browser, &crate::engine::opt_str(method), params.unwrap_or_default());
-        }
-    }
 }

@@ -532,6 +532,7 @@ dependencies = [
  "cef",
  "dirs",
  "ferrite-core",
+ "ferrite-mcp",
  "libc",
  "serde",
  "serde_json",
@@ -548,6 +549,7 @@ dependencies = [
  "adblock",
  "anyhow",
  "dirs",
+ "ferrite-mcp",
  "percent-encoding",
  "rusqlite",
  "serde",
@@ -555,6 +557,16 @@ dependencies = [
  "tempfile",
  "tracing",
  "ureq",
+ "url",
+]
+
+[[package]]
+name = "ferrite-mcp"
+version = "0.2.0"
+dependencies = [
+ "dirs",
+ "serde_json",
+ "tempfile",
  "url",
 ]
 

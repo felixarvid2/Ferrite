@@ -13,6 +13,7 @@
   --hover: rgba(0,0,0,.06); --press: rgba(0,0,0,.1);
   --accent: #4157e6; --accent-ink: #ffffff; --field-line: rgba(0,0,0,.08); --danger: #c9372c; --warn: #a86a00;
 }
+:root[data-ai] { --frame: #0e2b2b; --bar: #14393a; --field: #1d4a4b; --field-hover: #235658; --line: #2c6264; --accent: #4fd1c5; --accent-ink: #052321; --field-line: rgba(255,255,255,.08); }
 :root[data-private] { --frame: #1a1325; --bar: #281e3a; --field: #33284a; --field-hover: #3a2e53; --line: #463a5f; --accent: #b79bff; --field-line: rgba(255,255,255,.08); }
 
 html, body { overflow: hidden; user-select: none; background: var(--frame); color: var(--ink); }
@@ -78,7 +79,7 @@ button { cursor: default; }
 
 /* ---- frameless window: the strip is the title bar ------------------ */
 :root[data-frameless] #tabstrip { app-region: drag; -webkit-app-region: drag; }
-:root[data-frameless] #tabstrip .tab, :root[data-frameless] #tabstrip button, :root[data-frameless] #private-badge { app-region: no-drag; -webkit-app-region: no-drag; }
+:root[data-frameless] #tabstrip .tab, :root[data-frameless] #tabstrip button, :root[data-frameless] #private-badge, :root[data-frameless] #ai-badge { app-region: no-drag; -webkit-app-region: no-drag; }
 #drag-space { flex: 1; align-self: stretch; min-width: 24px; }
 #private-badge { margin-left: 0 !important; }
 #winctl { display: flex; align-self: flex-start; margin: 7px 0 0 8px; gap: 6px; }
@@ -151,7 +152,7 @@ button { cursor: default; }
 #bookmarks .empty-hint { color: var(--ink-3); font-size: 12px; padding-left: 6px; }
 
 /* ---- bars below the toolbar -------------------------------------- */
-#findbar, #prompts .prompt, #crashbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bar); border-top: 1px solid var(--line); }
+#findbar, #prompts .prompt, #crashbar, #aibar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--bar); border-top: 1px solid var(--line); }
 #find-input { width: 300px; height: 28px; padding: 0 12px; border-radius: 14px; border: 0; background: var(--field); color: var(--ink); outline: none; }
 #find-input:focus { box-shadow: 0 0 0 2px var(--accent); }
 #find-count { color: var(--ink-2); font-size: 12px; min-width: 80px; }
@@ -166,6 +167,13 @@ button { cursor: default; }
 .pbtn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 #crashbar { color: var(--ink); }
 #crashbar svg { color: var(--danger); }
+#aibar { background: color-mix(in srgb, #4fd1c5 24%, var(--bar)); border-top: 2px solid #4fd1c5; color: var(--ink); font-weight: 500; }
+#aibar svg { color: #4fd1c5; }
+#aibar .pbtn.primary { background: #4fd1c5; color: #052321; }
+#ai-badge { margin: 0 4px 9px 8px; padding: 3px 10px 3px 8px; border-radius: 12px; display: flex; gap: 6px; align-items: center;
+  background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--ink); font-size: 12px; align-self: flex-end; }
+.tab-ai { flex: none; font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 1px 5px; border-radius: 8px; background: #4fd1c5; color: #052321; }
+.tab.ai { box-shadow: inset 0 -2px 0 #4fd1c5; }
 /* hairline between chrome and page */
 body::after { content: ""; height: 1px; background: var(--line); flex: none; }
 
@@ -184,7 +192,7 @@ body::after { content: ""; height: 1px; background: var(--line); flex: none; }
 :root[data-side] body { background: var(--frame); }
 :root[data-side] body::after,
 :root[data-side] #toolbar, :root[data-side] #bookmarks, :root[data-side] #findbar, :root[data-side] #prompts,
-:root[data-side] #crashbar, :root[data-side] #suggest, :root[data-side] #toast, :root[data-side] #winctl,
+:root[data-side] #crashbar, :root[data-side] #aibar, :root[data-side] #ai-badge, :root[data-side] #suggest, :root[data-side] #toast, :root[data-side] #winctl,
 :root[data-side] #drag-space, :root[data-side] #private-badge { display: none !important; }
 :root[data-side] #tabstrip { flex-direction: column; align-items: stretch; height: 100vh; padding: 8px 8px 8px 8px; gap: 4px;
   box-shadow: inset -1px 0 0 var(--line); }

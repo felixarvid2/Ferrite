@@ -1,0 +1,22 @@
+[package]
+name = "ferrite-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "MCP (Model Context Protocol) bridge for the Ferrite browser: speaks MCP on stdio and forwards tool calls to the running browser over a Unix socket."
+
+[lib]
+name = "ferrite_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ferrite-mcp"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+url.workspace = true
+dirs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

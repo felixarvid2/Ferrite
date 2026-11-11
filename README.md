@@ -33,6 +33,56 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design.
 
+## Controlling Ferrite from an AI (MCP)
+
+Ferrite can be driven by an AI client (Claude Desktop, Claude Code, any MCP client) through the Model
+Context Protocol. It is off by default.
+
+1. In Ferrite, open Settings > AI control (MCP) and turn on **Allow AI control**. Settings shows the
+   socket path and a ready-to-paste client configuration.
+2. Add the `ferrite-mcp` program to the client. It sits next to `ferrite` (`/usr/bin/ferrite-mcp` in the
+   `.deb`, `dist/ferrite/ferrite-mcp` in a bundle, `target/release/ferrite-mcp` in a source build).
+   Claude Desktop (`claude_desktop_config.json`) or a Claude Code `.mcp.json`:
+
+   ```json
+   { "mcpServers": { "ferrite": { "command": "/usr/bin/ferrite-mcp", "args": [] } } }
+   ```
+
+   Claude Code: `claude mcp add ferrite -- /usr/bin/ferrite-mcp`. For another profile add
+   `"--profile=NAME"` to `args`. Ferrite must be running; the client may start before it (tool calls then
+   say Ferrite is unreachable).
+
+How it works and what it can do:
+
+- **Tools**: `list_tabs`, `open_tab`, `navigate`, `close_tab`, `back`, `forward`, `reload`, `snapshot`
+  (page text with element references), `screenshot` (PNG), `click`, `type`, `wait_for`, and `evaluate`.
+  Tab ids come from `open_tab`/`list_tabs`; references like `e12` come from the latest `snapshot`.
+- **Isolated by default**: `open_tab` opens tabs in a separate **AI window** (teal, badge "AI window").
+  It has its own in-memory browser context: no cookies, logins or storage from your profile, nothing is
+  kept after the last AI window closes, no history, not in the saved session. It is not a private
+  window and it is separate from them.
+- **Hand over a tab**: right-click a tab > **Let AI control this tab**. The tab keeps your profile
+  (cookies, logins), so the AI can act as you on that site. Tabs you did not hand over are invisible to
+  the AI. **Take back control from AI** in the same menu, or the **Stop** button of the bar
+  &ldquo;AI is controlling this tab&rdquo;, revokes control immediately (calls in flight fail).
+  Controlled tabs also carry an AI badge in the tab strip. Private windows can never be handed over.
+- **What the AI cannot do**: open `ferrite://` pages, the settings, downloads or file opening, use
+  Proton Pass, or navigate to anything but `http(s)` (and `about:blank`). Downloads and permission
+  prompts (camera, location, ...) from a controlled tab are refused. A handed-over tab that you (or a
+  link) take to an internal page leaves AI control.
+- **`evaluate`** (run JavaScript in the page) is a second switch, **Allow running JavaScript**, off by
+  default. A script can read everything on the page, including text you filled in.
+- **Untrusted content**: text from pages is returned between `<untrusted_web_content id="...">` markers
+  with a random id per response, and password field values are never included. Clients and models
+  should treat it as data, not instructions (prompt injection is the main risk of letting an AI browse).
+- **Transport**: MCP on stdio to `ferrite-mcp`, which talks to the browser over a Unix socket in the
+  profile directory (`mcp.sock`, mode 0600, same user only). There is no TCP or HTTP listener, so web
+  pages cannot reach it. Set `FERRITE_MCP_SOCKET` (for both programs) to use another path if the default
+  is too long for a Unix socket. The AppImage runs from a temporary mount: use the `.deb` or a bundle
+  for a stable `ferrite-mcp` path.
+- **Protocol**: current MCP revision 2026-07-28 (stateless, `server/discover`) and the handshake-based
+  revisions 2025-11-25 down to 2024-11-05. Tools only.
+
 ## Android
 
 [android/](android/README.md) is Ferrite for Android: a browser on Android System WebView with the
@@ -198,7 +248,7 @@ Each profile has its own directory. The default data directory is
 ## Project layout
 
 ```
-Cargo.toml            workspace (members: core, app)
+Cargo.toml            workspace (members: core, app, mcp)
 core/                 ferrite-core: pure Rust, no CEF
   src/db.rs           SQLite access (rusqlite, bundled)
   src/history.rs, bookmarks.rs, permissions.rs, downloads.rs
@@ -215,6 +265,8 @@ app/                  the `ferrite` binary: CEF integration
   src/engine/         CEF app, process handler, scheme registration, task helpers
   src/browser/        windows, tabs, handlers, ferrite:// scheme, JSON API,
                       menus, context menu, downloads, permissions, session, theme
+mcp/                  ferrite-mcp: MCP bridge binary (stdio) and the protocol/policy library the
+                      browser shares (JSON-RPC, tool catalogue, URL and tab policy)
 ui/                   browser UI: chrome.html/css/js, settings, history,
                       bookmarks, downloads, newtab, about pages
 scripts/              setup-cef.sh, run.sh, bundle.sh

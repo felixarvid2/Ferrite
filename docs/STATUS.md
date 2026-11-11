@@ -119,6 +119,21 @@ low-memory phones. No Proton Pass, no extensions.
   api.github.com response (ferrite-v0.1.1, ferrite-v0.1.0, assets-large-v1) is
   parsed (ignored test `live_github` and a trimmed fixture test).
 
+### AI control (MCP)
+
+Checked with `.claude/skills/ferrite-e2e/scripts/mcp-e2e.py` (real browser under Xvfb, the `ferrite-mcp`
+binary as a stdio subprocess, a local page server; 60+ checks): protocol in both eras (`initialize`,
+`server/discover`, unsupported version error), the socket (absent while off, mode 0600, removed when
+switched off), refusal of `ferrite://`, `file:`, `javascript:` by the bridge and, for raw socket clients,
+by the browser; oversize requests; `open_tab`, `snapshot` (password values hidden), `click`, `type`
+(with Enter, select), `wait_for`, `screenshot` (PNG, also of a background tab), `back/forward/reload`,
+untrusted-content markers that page text cannot forge; `evaluate` refused until enabled; a page trying
+`location='ferrite://settings'`, `window.open` and the `about:blank` popup trick never reaches an
+internal page; the AI window has its own cookies, no history, no session entry; downloads from AI tabs
+refused; handing a tab over from the tab menu, controlling it in the profile context, the bar and badge
+(screenshots), Stop revoking at once (also a call in flight), navigation to `ferrite://` revoking, a
+sleeping handed-over tab waking, controlled tabs not sleeping, private-window tabs invisible.
+
 ### Ad blocking (scriptlets and YouTube rules)
 
 - Local mock YouTube watch page (rules rewritten from youtube.com to
@@ -219,46 +234,6 @@ low-memory phones. No Proton Pass, no extensions.
 - WebAssembly: yes. IndexedDB: yes. localStorage: yes. Service Worker API: yes.
 - WebSocket (wss echo): yes. RTCPeerConnection: yes. MediaSource: yes.
 - VP9, AV1 and Opus playback: `canPlayType` returns "probably".
-
-## Not verified
-
-- YouTube video: www.youtube.com redirected to Google's "unusual traffic" page
-  for the test container's datacenter IP. Through an embed iframe the YouTube
-  player loaded and rendered but answered "Video unavailable" (server-side
-  refusal for this IP). Opening an `/embed/` URL directly shows "Error 153",
-  which YouTube shows in any browser without an embedding page. YouTube serves
-  VP9/AV1 + Opus, which play in Ferrite (see Media playback).
-- Gmail and Google Docs: only the sign-in page was reached (no account).
-- Login and OAuth flows: not tested end to end.
-- Hardware acceleration and WebGL on a real GPU. WebGL was unavailable in the
-  container (no GPU; the SwiftShader WebGL fallback is off by default).
-- Webcam and microphone, WebRTC calls, notifications display, picture-in-picture,
-  PDF viewer, printing, drag and drop of files, IME input, HiDPI, Wayland,
-  multi-monitor.
-- Single-instance relaunch forwarding (implemented, not tested).
-- Downloads "ask where" (uses CEF's dialog).
-- Multiple profiles: only through `--profile`; no UI.
-
-## Known limitations
-
-### Media and DRM
-
-- No H.264 or AAC in the standard CEF build (`canPlayType` returns "" for
-  `avc1` and `mp4a`). Sites that serve only H.264 (some news players,
-  X/Twitter video) will not play; YouTube serves VP9/AV1 and plays.
-  Without building Chromium: `scripts/setup-cef.sh --codecs` downloads a
-  third-party codec build (obs-rust, CEF 156.0.8, sha256-pinned) and installs
-  it into `~/.local/share/cef-codecs`; it is an older Chromium patch release.
-  Building it yourself: `scripts/build-cef-codecs.sh` (about 120 GB of disk).
-  H.264/AAC playback was verified with the third-party build. See
-  docs/CODECS.md. `ferrite://about/` shows which codecs a build supports.
-- Widevine DRM works in the standard build: Chromium's component updater
-  downloads the Widevine CDM into the profile (`<profile>/cef/WidevineCdm/`)
-  on first run; it is used after a restart. Verified: Widevine-encrypted VP9
-  test content (Shaka demo assets) played. Services that require H.264 with
-  Widevine, or hardware-backed DRM (Netflix in HD), need the codec build and
-  may still refuse a non-Chrome browser; Netflix/Spotify/Disney+ were not
-  tested (no accounts).
 
 ### Proton Pass
 
@@ -403,107 +378,6 @@ low-memory phones. No Proton Pass, no extensions.
   page shows. A login with several TOTP fields gets the field named `totp`,
   else the first by name.
 
-### Ad blocking (scriptlets and YouTube rules)
-
-- Local mock YouTube watch page (rules rewritten from youtube.com to
-  youtube.localhost): inline `ytInitialPlayerResponse.adPlacements` became
-  `undefined`; `JSON.parse` output lost `adPlacements` and `playerAds`; the XHR
-  player response lost `adPlacements` through `adSlots`; the fetch response had
-  `adPlacements`/`adSlots` renamed to `no_ads`. With blocking off, all of these
-  were unchanged.
-- Scriptlet injection timing checked for: startup tab, new tabs, same-site and
-  cross-site navigation, server redirect to another host, and reload.
-- Real sites load with blocking on: CNN, Reddit, GitHub, BBC, Wikipedia, Vimeo.
-- Unit tests: trusted vs untrusted lists, aliases, json-prune, CSS. An ignored
-  test checks that the real lists produce all YouTube rule families (script
-  about 78 KB for youtube.com watch pages; generic CSS about 17 KB on news sites).
-
-### Sessions and crashes
-
-- Quit with `Ctrl+Shift+Q`, then restart: tabs are restored.
-- `kill -9`, then restart: tabs are restored.
-
-### Tab sleeping
-
-- An idle tab frees its browser and wakes when selected.
-
-### Internal pages
-
-- History, downloads, settings and new tab pages render.
-
-### Look and window frame
-
-- Redesigned toolbar: the active tab merges into the toolbar, separators between
-  inactive tabs, coloured letter icons for sites without a favicon, the address
-  bar shows the site's domain in full ink when not focused, purple tint in
-  private windows. Internal pages share a design system with a sidebar, toggle
-  switches and day-grouped history; checked in dark and light themes.
-- Frameless window by default: the tab strip is the title bar (CSS
-  `app-region: drag`, reported through CEF's drag handler and applied with
-  `Window::set_draggable_regions`). Dragging the strip moved the window under
-  openbox; minimize/maximize/close buttons are drawn by the UI.
-  Settings > Appearance > "Use system title bar" (`system_titlebar`) turns the
-  desktop's title bar back on (takes effect for new windows).
-- Resizing: dragging the bottom-right corner (1280x860 -> 1130x760) and the
-  left edge resized the window under openbox. Frameless windows keep a 4 px
-  frame because web content is a native child window that would swallow edge
-  clicks. (Before this fix windows were not resizable at all: cef-rs defaults
-  `WindowDelegate::can_resize/can_maximize/can_minimize` to false.)
-- Maximized and fullscreen windows drop the resize frame (content reaches the
-  screen edge; checked by screenshot), and it returns when restored. F11 and
-  HTML5 video fullscreen were checked; in HTML5 fullscreen the video fills the
-  screen and the UI strip is hidden.
-- "Use system title bar": a new window gets the window manager's title bar and
-  no Ferrite window buttons (checked under openbox).
-- Not checked: GNOME/KDE window managers, Wayland.
-
-### Vertical tabs (default layout)
-
-- Default since the design review scored it 9/10 (top tabs: 8.7/10). Settings >
-  Appearance > "Vertical tabs" switches back to tabs above the toolbar (new
-  windows; existing profiles keep their saved choice). Tabs
-  move to a 240 px sidebar left of the content (a second UI view running
-  `chrome.html#side` against the same API); the top strip keeps the window
-  buttons and drag area. Checked: layout after restart with restored tabs,
-  switching tabs and opening a new tab by mouse in the sidebar.
-- Not checked: drag-reordering in the sidebar, many tabs (scrolling).
-
-### Packaging
-
-- `scripts/package.sh --deb-only` built `dist/ferrite_0.1.0_amd64.deb` (134 MB).
-  `apt install ./dist/...deb` resolved its dependencies and installed it on
-  Ubuntu 24.04. Checks: `/opt/ferrite/chrome-sandbox` is `-rwsr-xr-x root`,
-  `x-www-browser` points to `/usr/bin/ferrite`, the desktop file passes
-  `desktop-file-validate` and is in the MIME cache for http/https, and the
-  icons are installed. `ferrite` started from `/usr/bin` and opened a window
-  with `WM_CLASS "ferrite", "Ferrite"` (matching `StartupWMClass`).
-- WM_CLASS is set with Xlib: cef-rs loses strings written to
-  `LinuxWindowProperties`, and Chromium's `--class` switch does not reach
-  Views windows.
-- AppImage: `scripts/package.sh --appimage-only` built a 170 MB
-  `Ferrite-0.1.0-x86_64.AppImage`; it started and opened a window (run with
-  `APPIMAGE_EXTRACT_AND_RUN=1`, since the container has no FUSE).
-- Not tested: the AppArmor profile (no AppArmor in the
-  container), the sandbox from the installed package (tests run as root with
-  `--no-sandbox`), and `xdg-settings` on a real desktop.
-
-### Release bundle
-
-- The release bundle in `dist/` runs standalone with the embedded UI.
-
-### Media playback
-
-- WebM (VP9) video plays: 960x540, `currentTime` advances (MDN's `flower.webm`
-  served locally); MP3 audio plays.
-- MP4 (H.264/AAC) does not: `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`, as expected
-  for CEF builds without proprietary codecs (see Known limitations).
-
-### Web platform probe
-
-- WebAssembly: yes. IndexedDB: yes. localStorage: yes. Service Worker API: yes.
-- WebSocket (wss echo): yes. RTCPeerConnection: yes. MediaSource: yes.
-- VP9, AV1 and Opus playback: `canPlayType` returns "probably".
-
 ## Not verified
 
 - YouTube video: www.youtube.com redirected to Google's "unusual traffic" page
@@ -522,6 +396,11 @@ low-memory phones. No Proton Pass, no extensions.
 - Single-instance relaunch forwarding (implemented, not tested).
 - Downloads "ask where" (uses CEF's dialog).
 - Multiple profiles: only through `--profile`; no UI.
+- MCP with real clients (Claude Desktop, Claude Code): only a scripted stdio client was used. The
+  2026-07-28 protocol revision was implemented from its published specification, not tested against a
+  client that speaks it. Downloads: in the test container no download completed even in a normal tab
+  (before and after this feature), so the refusal on AI tabs is verified through its log line only. Real
+  sites with iframes, shadow DOM, consent walls and heavy single-page apps; Wayland.
 
 ## Known limitations
 
@@ -577,6 +456,23 @@ low-memory phones. No Proton Pass, no extensions.
   are not applied.
 - uBO `$redirect` rules act as plain blocks; no redirect resources are served.
 - Private windows behave the same as normal windows.
+
+### AI control (MCP)
+
+- The AI is as safe as the client: page text is marked untrusted, but a model can still be talked into
+  harmful actions on a handed-over tab (that tab is logged in as you). Hand over only what you would let
+  an assistant do. `evaluate`, when enabled, can read everything on the page.
+- Pages and snapshots cover the main frame only (no iframe content, no clicks inside frames, no
+  cross-origin or closed shadow DOM). No file upload, no dialogs (`alert` blocks DevTools calls until they
+  time out), no keyboard shortcuts, drag and drop, hover, scrolling tool, tab switching in the user's UI
+  beyond what `click`/`screenshot` need (they bring the tab to the front of its window).
+- Tools are executed one at a time per connection; `notifications/cancelled` is not acted on (calls are
+  bounded by timeouts: DevTools 15 s, `wait_for` at most 30 s).
+- Downloads and permission prompts are denied on controlled tabs, including for a handed-over tab while
+  you use it yourself. Proton Pass fill, 2FA and save prompts are off there.
+- The AI window's context is in memory: logins made by the AI are lost when its last window closes.
+- Linux only (Unix socket). The AppImage's `ferrite-mcp` path changes with every run.
+- The AI window is not restored and not counted as "the last window" for session saving.
 
 ### Not implemented
 

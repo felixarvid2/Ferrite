@@ -9,6 +9,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cef::*;
 use ferrite_core::commands::Command;
 use ferrite_core::omnibox::{display_url, security_level};
+use ferrite_mcp::policy::Control;
 use serde_json::{json, Value};
 
 fn arg_str<'a>(args: &'a Value, key: &str) -> Result<&'a str> {
@@ -45,6 +46,11 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
                 "closing": t.closing,
                 "sleeping": t.browser.is_none() && t.view.is_none(),
                 "media": t.media_video || t.media_audio,
+                "ai": match t.ai {
+                    Control::None => Value::Null,
+                    Control::Own => json!("own"),
+                    Control::Shared => json!("shared"),
+                },
             })
         })
         .collect();
@@ -101,6 +107,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
     json!({
         "win": win,
         "private": w.private,
+        "ai_window": w.ai,
         "theme": s.settings.theme,
         "tabs": tabs,
         "active": w.active,
@@ -112,7 +119,9 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "closed_tabs": w.closed_tabs.len(),
         "frameless": !s.settings.system_titlebar,
         "vertical_tabs": w.side_view.is_some(),
-        "passwords": active.map_or(0, |t| s.passwords.count_for(&t.url)),
+        "passwords": active.map_or(0, |t| {
+            if t.ai == Control::None { s.passwords.count_for(&t.url) } else { 0 }
+        }),
         "pass_save": passwords::prompt_json(s, w.active),
         "maximized": w.window.as_ref().is_some_and(|w| w.is_maximized() != 0),
     })
@@ -131,6 +140,7 @@ const UI_ONLY: &[&str] = &[
     "password_menu",
     "blocking_menu",
     "pass_save_answer",
+    "ai_stop",
 ];
 
 /// Reject tab ids that belong to another window (or to no tab at all).
@@ -308,6 +318,12 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             );
             Value::Null
         }
+        "ai_stop" => {
+            let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
+            super::mcp::revoke(s, tab);
+            Value::Null
+        }
+        "mcp_status" => super::mcp::status(s),
         "pass_status" => passwords::status_json(s),
         "pass_vaults" => passwords::vaults_json(s),
         "pass_save_answer" => {
@@ -495,6 +511,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                 }
             }
             passwords::settings_changed(s, was_pass, &old_cli);
+            super::mcp::apply_settings(s);
             s.mark_all_dirty();
             serde_json::to_value(&s.settings)?
         }

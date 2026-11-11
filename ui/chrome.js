@@ -82,6 +82,8 @@ function renderTabs() {
       icon.replaceChildren(t.loading ? el("div", "spinner") : t.crashed ? Object.assign(el("span"), { innerHTML: WARN }) : favicon(t.favicon, t.url));
     }
     node.querySelector(".tab-media").hidden = !t.media;
+    node.querySelector(".tab-ai").hidden = !t.ai;
+    node.classList.toggle("ai", !!t.ai);
     order.push(node);
   }
   for (const n of existing.values()) n.remove();
@@ -94,7 +96,8 @@ function makeTab(id) {
   n.dataset.id = id;
   n.setAttribute("role", "tab");
   n.draggable = true;
-  n.append(el("span", "tab-icon"), el("span", "tab-title"), Object.assign(el("span", "tab-media", "●"), { title: "Using camera or microphone" }));
+  n.append(el("span", "tab-icon"), el("span", "tab-title"), Object.assign(el("span", "tab-media", "●"), { title: "Using camera or microphone" }),
+    Object.assign(el("span", "tab-ai", "AI"), { title: "Controlled by an AI client", hidden: true }));
   const close = el("button", "tab-close");
   close.title = "Close tab (Ctrl+W)";
   close.innerHTML = '<svg viewBox="0 0 16 16"><path d="m3 3 10 10M13 3 3 13"/></svg>';
@@ -271,6 +274,12 @@ window.ferrite = {
     document.documentElement.dataset.theme = s.theme === "light" ? "light"
       : s.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
     $("private-badge").hidden = !s.private;
+    $("ai-badge").hidden = !s.ai_window;
+    if (s.ai_window) document.documentElement.dataset.ai = ""; else delete document.documentElement.dataset.ai;
+    const aiTab = s.tabs.find(t => t.id === s.active && t.ai);
+    $("aibar").hidden = !aiTab;
+    $("aibar").dataset.tab = aiTab ? aiTab.id : "";
+    $("ai-text").textContent = aiTab && aiTab.ai === "own" ? "AI is controlling this tab (opened by the AI in this isolated window)" : "AI is controlling this tab";
     $("winctl").hidden = !s.frameless;
     if (s.frameless && !SIDE) document.documentElement.dataset.frameless = ""; else delete document.documentElement.dataset.frameless;
     if (s.vertical_tabs && !SIDE) document.documentElement.dataset.vtabs = ""; else delete document.documentElement.dataset.vtabs;
@@ -310,6 +319,7 @@ $("downloads").onclick = () => cmd("downloads");
 $("zoom").onclick = () => cmd("zoom_reset");
 $("menu").onclick = () => { const r = $("menu").getBoundingClientRect(); api("menu", { x: Math.round(r.right), y: Math.round(r.bottom) }); };
 $("crash-reload").onclick = () => cmd("reload");
+$("ai-stop").onclick = () => { const t = Number($("aibar").dataset.tab); if (t) api("ai_stop", { tab: t }); };
 // Double-click on empty strip: maximize like a title bar (frameless) or new tab.
 $("tabstrip").addEventListener("dblclick", e => {
   if (!["tabstrip", "tabs", "drag-space"].includes(e.target.id)) return;
