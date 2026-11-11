@@ -14,6 +14,8 @@ pub struct ProfilePaths {
     pub filter_lists: PathBuf,
     /// Last update check and the update it found.
     pub update_state: PathBuf,
+    /// Unix socket of the MCP server (AI control), see the `ferrite-mcp` crate.
+    pub mcp_socket: PathBuf,
 }
 
 impl ProfilePaths {
@@ -45,6 +47,7 @@ impl ProfilePaths {
             session: root.join("session.json"),
             filter_lists: root.join("filter-lists"),
             update_state: root.join("update.json"),
+            mcp_socket: root.join("mcp.sock"),
             root,
         })
     }
@@ -78,6 +81,11 @@ mod tests {
         assert_eq!(p.session, base.join("profiles/default/session.json"));
         assert_eq!(p.filter_lists, base.join("profiles/default/filter-lists"));
         assert_eq!(p.update_state, base.join("profiles/default/update.json"));
+        // The bridge finds the socket by its own copy of this layout.
+        assert_eq!(
+            p.mcp_socket,
+            ferrite_mcp::wire::socket_path_in(base, "default")
+        );
     }
 
     #[test]

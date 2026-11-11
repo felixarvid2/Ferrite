@@ -561,6 +561,10 @@ fn toast(s: &State, win: WinId, msg: &str) {
 /// The tab's browser id and main-frame URL, if it has a live main frame.
 fn tab_target(s: &State, tab: TabId) -> Option<(i32, String)> {
     let t = s.tabs.get(&tab)?;
+    // Never fill (or fetch codes for) a tab the AI controls.
+    if t.ai != ferrite_mcp::policy::Control::None {
+        return None;
+    }
     let b = t.browser.as_ref()?;
     Some((b.identifier(), from_userfree(&b.main_frame()?.url())))
 }
@@ -880,8 +884,8 @@ pub fn capture(s: &mut State, browser_id: i32, url: String, payload: String) {
         return;
     };
     // Private windows never offer to save.
-    if s.is_private(win) {
-        tracing::debug!("login capture ignored: private window");
+    if s.is_ephemeral(win) || s.ai_control(tab) != ferrite_mcp::policy::Control::None {
+        tracing::debug!("login capture ignored: private or AI-controlled");
         return;
     }
     let Some(site) = ferrite_core::blocker::site_key(&url) else {

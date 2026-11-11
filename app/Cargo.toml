@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 ferrite-core = { path = "../core" }
+ferrite-mcp = { path = "../mcp" }
 dirs.workspace = true
 # The CEF version is pinned exactly: every bump of this line is an engine
 # (Chromium) update, see docs/ENGINE_UPDATES.md.

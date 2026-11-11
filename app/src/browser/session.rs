@@ -10,7 +10,7 @@ use ferrite_core::settings::StartupMode;
 pub fn snapshot(s: &State) -> Session {
     let mut windows = Vec::new();
     for w in s.windows.values() {
-        if w.private || w.closing {
+        if w.private || w.ai || w.closing {
             continue;
         }
         let tabs: Vec<TabSnapshot> = w
@@ -102,6 +102,7 @@ pub fn restore_or_open(s: &mut State, launch: &LaunchOptions) {
         for snap in previous.windows {
             let init = window::WindowInit {
                 private: false,
+                ai: false,
                 tabs: snap
                     .tabs
                     .into_iter()

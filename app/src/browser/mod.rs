@@ -15,6 +15,7 @@ pub mod downloads;
 pub mod handlers;
 pub mod import;
 pub mod inject;
+pub mod mcp;
 pub mod menu;
 pub mod passwords;
 pub mod permissions;
@@ -82,6 +83,10 @@ pub struct Tab {
     pub discarding: bool,
     /// Result of the TLS check for the current page (https only).
     pub secure: Option<bool>,
+    /// Under AI control (MCP)? See `mcp.rs`.
+    pub ai: ferrite_mcp::policy::Control,
+    /// Counts loads started in this tab (the MCP tools wait on it).
+    pub load_seq: u64,
 }
 
 impl Tab {
@@ -116,6 +121,8 @@ pub struct Win {
     pub tabs: Vec<TabId>,
     pub active: Option<TabId>,
     pub private: bool,
+    /// The AI window: isolated in-memory context, leaves no traces.
+    pub ai: bool,
     pub closing: bool,
     pub closed_tabs: ClosedTabs,
     pub html_fullscreen: bool,
@@ -150,6 +157,8 @@ pub struct State {
     pub content_client: Client,
     pub ui_client: Client,
     pub private_context: Option<RequestContext>,
+    /// In-memory context shared by the AI windows (not the user's profile).
+    pub ai_context: Option<RequestContext>,
     pub downloads: downloads::Downloads,
     /// Windows whose UI needs a state push.
     pub dirty: HashSet<WinId>,
@@ -250,6 +259,7 @@ pub fn start() {
         content_client: handlers::make_client(handlers::ClientKind::Content),
         ui_client: handlers::make_client(handlers::ClientKind::Ui),
         private_context: None,
+        ai_context: None,
         downloads: downloads::Downloads::default(),
         dirty: HashSet::new(),
         flush_scheduled: false,
@@ -280,6 +290,7 @@ pub fn start() {
         }
         theme::apply_to_context(s, None);
         session::restore_or_open(s, &launch);
+        mcp::apply_settings(s);
     });
 }
 
@@ -307,11 +318,15 @@ pub fn relaunch(urls: Vec<String>, private: bool) {
         }
         let target = s
             .last_window_focus
-            .filter(|w| s.windows.get(w).is_some_and(|w| !w.private && !w.closing))
+            .filter(|w| {
+                s.windows
+                    .get(w)
+                    .is_some_and(|w| !w.private && !w.ai && !w.closing)
+            })
             .or_else(|| {
                 s.windows
                     .values()
-                    .find(|w| !w.private && !w.closing)
+                    .find(|w| !w.private && !w.ai && !w.closing)
                     .map(|w| w.id)
             });
         match (target, urls.is_empty()) {
@@ -334,6 +349,7 @@ pub fn relaunch(urls: Vec<String>, private: bool) {
 
 /// Called after the message loop ends, before `shutdown()`.
 pub fn before_shutdown() {
+    mcp::shutdown();
     with_state(|s| {
         s.downloads.cancel_all();
         session::mark_clean_exit(s);
@@ -346,9 +362,9 @@ impl State {
         ferrite_core::omnibox::resolve_input(input, &template)
     }
 
-    /// The database for the window: private windows never touch disk.
+    /// The database for the window: private and AI windows never touch disk.
     pub fn db_for(&self, win: WinId) -> &Database {
-        if self.windows.get(&win).is_some_and(|w| w.private) {
+        if self.is_ephemeral(win) {
             &self.private_db
         } else {
             &self.db
@@ -357,6 +373,16 @@ impl State {
 
     pub fn is_private(&self, win: WinId) -> bool {
         self.windows.get(&win).is_some_and(|w| w.private)
+    }
+
+    /// Private or AI window: nothing about it is written to the profile.
+    pub fn is_ephemeral(&self, win: WinId) -> bool {
+        self.windows.get(&win).is_some_and(|w| w.private || w.ai)
+    }
+
+    /// The AI control state of a tab (None for unknown tabs).
+    pub fn ai_control(&self, tab: TabId) -> ferrite_mcp::policy::Control {
+        self.tabs.get(&tab).map(|t| t.ai).unwrap_or_default()
     }
 
     pub fn tab_of_browser(&self, browser_id: i32) -> Option<TabId> {
@@ -455,8 +481,25 @@ impl State {
         }
     }
 
-    /// Request context for new browsers in `win` (None = global/profile).
-    pub fn context_for(&mut self, private: bool) -> Option<RequestContext> {
+    /// Request context for new browsers (None = global/profile).
+    /// With the AI window's own in-memory context when `ai` (never shared
+    /// with private windows).
+    pub fn context_for_kind(&mut self, private: bool, ai: bool) -> Option<RequestContext> {
+        if ai && !private {
+            if self.ai_context.is_none() {
+                let settings = RequestContextSettings {
+                    persist_session_cookies: 0,
+                    ..Default::default()
+                };
+                let ctx = request_context_create_context(Some(&settings), None);
+                if let Some(ctx) = &ctx {
+                    scheme::register(Some(ctx));
+                    theme::apply_to_context(self, Some(ctx));
+                }
+                self.ai_context = ctx;
+            }
+            return self.ai_context.clone();
+        }
         if !private {
             return None;
         }

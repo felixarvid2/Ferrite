@@ -19,3 +19,6 @@ dirs.workspace = true
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 ureq = { version = "3", features = ["platform-verifier"] }
 tempfile.workspace = true
+
+[dev-dependencies]
+ferrite-mcp = { path = "../mcp" }

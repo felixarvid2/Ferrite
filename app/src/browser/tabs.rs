@@ -16,6 +16,8 @@ pub struct NewTab {
     pub lazy: bool,
     pub title: String,
     pub opener: Option<TabId>,
+    /// Created by the AI (MCP `open_tab`, or a popup/link of an AI tab).
+    pub ai: bool,
 }
 
 impl NewTab {
@@ -57,6 +59,12 @@ fn empty_tab(id: TabId, win: WinId, url: &str, opts: &NewTab) -> Tab {
         last_active: ferrite_core::now_ms(),
         discarding: false,
         secure: None,
+        ai: if opts.ai {
+            ferrite_mcp::policy::Control::Own
+        } else {
+            ferrite_mcp::policy::Control::None
+        },
+        load_seq: 0,
     }
 }
 
@@ -120,7 +128,8 @@ pub fn create_view(s: &mut State, tab: TabId) {
     }
     let (win, url) = (t.win, t.url.clone());
     let private = s.is_private(win);
-    let mut ctx = s.context_for(private);
+    let ai_win = s.windows.get(&win).is_some_and(|w| w.ai);
+    let mut ctx = s.context_for_kind(private, ai_win);
     let settings = window::browser_settings(s);
     let mut client = s.content_client.clone();
     let mut delegate = TabViewDelegate::new(tab);
@@ -185,8 +194,14 @@ fn adopt_popup_window(
     size: Option<(i32, i32)>,
 ) {
     let private = s.tabs.get(&opener).is_some_and(|t| s.is_private(t.win));
+    let ai = s
+        .tabs
+        .get(&opener)
+        .and_then(|t| s.windows.get(&t.win))
+        .is_some_and(|w| w.ai);
     let mut init = window::WindowInit {
         private,
+        ai,
         ..window::WindowInit::normal(vec![])
     };
     init.tabs.clear();
@@ -212,9 +227,12 @@ fn adopt_into(
     view: BrowserView,
     background: bool,
 ) {
+    // A popup of an AI-owned tab stays AI-owned (and in the AI context); a
+    // popup of a handed-over tab is not handed over.
     let opts = NewTab {
         background,
         opener: Some(opener),
+        ai: s.ai_control(opener) == ferrite_mcp::policy::Control::Own,
         ..Default::default()
     };
     s.tabs
@@ -501,6 +519,7 @@ pub fn browser_created(s: &mut State, tab: TabId, browser: Browser) {
     };
     t.browser = Some(browser);
     let win = t.win;
+    super::mcp::sync_tab(s, tab);
     s.mark_dirty(win);
 }
 
@@ -577,6 +596,7 @@ pub fn sleep_idle_tabs(s: &mut State) {
                 && !t.loading
                 && !t.media_audio
                 && !t.media_video
+                && t.ai == ferrite_mcp::policy::Control::None
                 && t.last_active < cutoff
                 && !t.url.starts_with("ferrite:")
         })
@@ -611,6 +631,7 @@ pub fn tab_slept(s: &mut State, tab: TabId) {
         t.discarding = false;
         t.loading = false;
     }
+    super::mcp::sync_tab(s, tab);
     s.mark_dirty(win);
 }
 

@@ -57,6 +57,10 @@ pub struct Settings {
     pub proton_pass_never_save: Vec<String>,
     /// Ask api.github.com once a day whether a newer Ferrite release exists.
     pub check_for_updates: bool,
+    /// Let an AI client (MCP, through the `ferrite-mcp` bridge) control tabs.
+    pub mcp_enabled: bool,
+    /// Also offer the MCP `evaluate` tool (run JavaScript in a page).
+    pub mcp_allow_evaluate: bool,
 }
 
 impl Default for Settings {
@@ -88,6 +92,8 @@ impl Default for Settings {
             proton_pass_vault: String::new(),
             proton_pass_never_save: Vec::new(),
             check_for_updates: true,
+            mcp_enabled: false,
+            mcp_allow_evaluate: false,
         }
     }
 }
@@ -163,6 +169,8 @@ mod tests {
         assert!(!s.download_dir.is_empty());
         assert!(s.proton_pass_offer_save);
         assert!(s.check_for_updates);
+        // AI control is opt-in, and running page scripts is a second opt-in.
+        assert!(!s.mcp_enabled && !s.mcp_allow_evaluate);
         assert!(s.proton_pass_vault.is_empty() && s.proton_pass_never_save.is_empty());
     }
 

@@ -33,6 +33,8 @@ pub struct TabInit {
 
 pub struct WindowInit {
     pub private: bool,
+    /// The AI window (isolated context, marked), see `mcp.rs`.
+    pub ai: bool,
     pub tabs: Vec<TabInit>,
     pub active: usize,
     pub bounds: Option<Rect>,
@@ -48,6 +50,7 @@ impl WindowInit {
         };
         WindowInit {
             private,
+            ai: false,
             tabs: urls
                 .into_iter()
                 .map(|url| TabInit {
@@ -79,7 +82,7 @@ pub fn browser_settings(s: &State) -> BrowserSettings {
 pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
     let id = next_id();
     let height = Rc::new(Cell::new(INITIAL_UI_HEIGHT));
-    let mut ctx = s.context_for(init.private);
+    let mut ctx = s.context_for_kind(init.private, init.ai);
     let settings = browser_settings(s);
 
     let mut ui_client = s.ui_client.clone();
@@ -119,7 +122,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
             Some(&mut side_delegate),
         );
         if let (Some(side), Some(row)) = (side, panel_create(None)) {
-            side.set_background_color(theme::frame_color(&s.settings, init.private));
+            side.set_background_color(theme::frame_color(&s.settings, init.private, init.ai));
             let layout = row.set_to_box_layout(Some(&BoxLayoutSettings {
                 horizontal: 1,
                 cross_axis_alignment: AxisAlignment::STRETCH,
@@ -152,6 +155,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
             tabs: Vec::new(),
             active: None,
             private: init.private,
+            ai: init.ai,
             closing: false,
             closed_tabs: ClosedTabs::new(),
             html_fullscreen: false,
@@ -192,8 +196,15 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
             height: 0,
         }),
         init.maximized,
-        init.private,
-        (!s.settings.system_titlebar).then(|| theme::frame_color(&s.settings, init.private)),
+        if init.private {
+            "Ferrite (Private)"
+        } else if init.ai {
+            "Ferrite (AI)"
+        } else {
+            "Ferrite"
+        },
+        (!s.settings.system_titlebar)
+            .then(|| theme::frame_color(&s.settings, init.private, init.ai)),
     );
     let window = window_create_top_level(Some(&mut delegate));
     if let Some(w) = s.windows.get_mut(&id) {
@@ -219,11 +230,11 @@ fn prepare_close(s: &mut State, win: WinId) {
     if w.closing {
         return;
     }
-    let private = w.private;
+    let private = w.private || w.ai;
     let others = s
         .windows
         .values()
-        .filter(|o| o.id != win && !o.private && !o.closing)
+        .filter(|o| o.id != win && !o.private && !o.ai && !o.closing)
         .count();
     if !private && others == 0 {
         super::session::save(s, true);
@@ -251,8 +262,13 @@ fn window_destroyed(s: &mut State, win: WinId) {
     if let Some(b) = &w.ui_browser {
         s.browsers.remove(&b.identifier());
     }
+    if !s.windows.values().any(|w| w.ai) {
+        s.ai_context = None;
+    }
     if !s.windows.values().any(|w| w.private) {
         s.private_context = None;
+    }
+    if !s.windows.values().any(|w| w.private || w.ai) {
         // Forget private browsing traces kept in memory.
         if let Ok(db) = ferrite_core::db::Database::open_in_memory() {
             s.private_db = db;
@@ -281,6 +297,8 @@ pub fn update_title(s: &State, win: WinId) {
         .unwrap_or_default();
     let suffix = if w.private {
         "Ferrite (Private)"
+    } else if w.ai {
+        "Ferrite (AI)"
     } else {
         "Ferrite"
     };
@@ -340,7 +358,7 @@ wrap_window_delegate! {
         content: Panel,
         bounds: Rect,
         maximized: bool,
-        private: bool,
+        title: &'static str,
         // Some(frame colour) for a frameless window.
         frameless: Option<u32>,
     }
@@ -371,7 +389,7 @@ wrap_window_delegate! {
             if let Some(layout) = layout {
                 layout.set_flex_for_view(Some(&mut content), 1);
             }
-            let title = if self.private { "Ferrite (Private)" } else { "Ferrite" };
+            let title = self.title;
             window.set_title(Some(&cef_str(title)));
             if let Some(frame_color) = self.frameless {
                 // Web content is a native child window that swallows mouse

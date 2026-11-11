@@ -38,7 +38,12 @@ pub fn socket_path(profile: &str) -> Option<PathBuf> {
         Some(d) if !d.is_empty() => PathBuf::from(d),
         _ => dirs::data_dir()?.join("ferrite"),
     };
-    Some(base.join("profiles").join(profile).join(SOCKET_FILE))
+    Some(socket_path_in(&base, profile))
+}
+
+/// The socket of `profile` under the data directory `base`.
+pub fn socket_path_in(base: &std::path::Path, profile: &str) -> PathBuf {
+    base.join("profiles").join(profile).join(SOCKET_FILE)
 }
 
 pub enum Line {

@@ -112,6 +112,12 @@ fn request(
         reply.send(false);
         return;
     };
+    // Nobody is watching the prompt of a tab the AI drives, and a page the
+    // AI visits must not get the camera, location or clipboard: deny.
+    if s.ai_control(tab) != ferrite_mcp::policy::Control::None {
+        reply.send(false);
+        return;
+    }
     let origin = ferrite_core::omnibox::origin_of(&origin).unwrap_or(origin);
     if let Some(allow) = stored_decision(s, win, &origin, &perms) {
         reply.send(allow);
