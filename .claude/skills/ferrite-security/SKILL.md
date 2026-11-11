@@ -13,6 +13,12 @@ Paths relative to `app/src` (from the repository root) unless noted. Companion s
 - Privileged: `ferrite://` pages (`chrome.html` strip, settings, history, bookmarks, downloads, about, newtab) and the JSON
   API they call (`browser/api.rs`). It can read/clear history, change settings, open files (`download_open`, `api.rs:364`),
   drive tabs. Goal: web content can never reach it, directly or by confusing the navigation guard.
+- Semi-trusted: an **AI client** driving the browser through MCP (`browser/mcp.rs`, `mcp/`). It is not the
+  user and not web content: it may be prompt-injected by the pages it reads, so it gets only http(s)
+  pages and tabs, never `ferrite://` pages, the JSON API, settings, downloads, file opening or Proton
+  Pass. Any local process of the same user can also speak to its socket, so the browser (not the
+  `ferrite-mcp` bridge) enforces everything. Other users: socket is 0600 in a 0700 directory and
+  `SO_PEERCRED` is checked.
 - Local attacker/other users are out of scope except: private windows must leave no traces, files written by downloads
   must not escape the download dir, Ferrite must not run unsandboxed silently.
 
@@ -56,6 +62,23 @@ Paths relative to `app/src` (from the repository root) unless noted. Companion s
     documents (`:624`); filter lists are fetched with `ureq` + OS certificate verifier. Lists are data, not code, but
     regexes can be slow: keep matching off the UI thread.
 
+15. **AI control (MCP)** (`browser/mcp.rs`, `browser/cdp.rs`, crate `mcp/`): off by default
+    (`mcp_enabled`; `evaluate` needs `mcp_allow_evaluate` too). Unix socket only, no TCP/HTTP (pages can reach
+    localhost), mode 0600, same-uid peer check, at most 8 connections, request lines <= 1 MiB.
+    Every call is re-validated in the browser (`ferrite_mcp::tools::parse_call`: http(s)/`about:blank`
+    only) and re-checked on the UI thread (`mcp::check` -> `policy::may_control`: MCP on, tab controlled
+    (`Tab::ai`), not a private window, Own tab in the AI window / Shared tab outside it, live main-frame
+    URL is a web page), and again before the answer is returned, so revoke (Stop, tab menu, MCP off,
+    navigation to an internal page) takes effect on calls in flight. `on_before_browse` calls
+    `mcp::navigation_ok` (AI-owned tabs cannot leave http(s); handed-over tabs that do lose control) from a
+    thread-local, not `State`. Own tabs live in the AI window (`Win::ai`, in-memory `State::ai_context`,
+    `is_ephemeral`: in-memory DB, no history, skipped by the session); handed-over tabs are only offered for
+    normal windows (`mcp::menu_state`). Controlled tabs: downloads refused (`can_download`), permission
+    prompts denied (`permissions.rs`), Proton Pass off (`passwords::tab_target`, `capture`), never put to
+    sleep. Page reading/clicking runs in an isolated world, results are wrapped in
+    `<untrusted_web_content id=NONCE>` markers (random per response), password values are never read.
+    Navigation goes through `tabs::load_url`, never `Page.navigate`.
+
 ## Known weak spots to verify (not fixed)
 - `fresh` accepts `about:blank` (`scheme.rs:60`): a web page can `w = open('about:blank'); w.location = 'ferrite://settings'`
   (opener may navigate its blank popup). Test it; if it loads, tighten (only truly empty URL and no opener).
@@ -67,6 +90,10 @@ Paths relative to `app/src` (from the repository root) unless noted. Companion s
   `clear_browsing_data` drops a marker file from private windows (`api.rs:492`). Decide whether that is intended.
 - API commands take tab ids from args without checking they belong to the caller's window (`api.rs:146,194,206,212`):
   fine while only internal pages call, but a private strip can touch normal-window tabs.
+
+- MCP: a handed-over tab is logged in as the user, so a prompt-injected AI can act as the user on that
+  site (and, with `evaluate` on, read everything on the page). That is the feature; the user decides.
+  Popups of a handed-over tab are not handed over. Snapshots do not include iframes.
 
 ## Review checklist (answer yes/no; any "no" needs a reason)
 1. Does any new API command check caller kind where needed, and is it in `UI_ONLY` if structural?
@@ -84,6 +111,10 @@ Paths relative to `app/src` (from the repository root) unless noted. Companion s
 13. Are new dependencies necessary, pinned, licence-compatible, and clean in `cargo audit`/`cargo deny`?
 14. Does new `unsafe` have a SAFETY comment stating who guarantees validity and thread?
 15. Is there a test (unit for pure logic in `core`, abuse test below for guard changes)?
+16. MCP: does a new tool go through `parse_call` (validated args) and `mcp::check`, return page text only inside
+    `wrap_untrusted`, and avoid anything that reaches `ferrite://`, the API, downloads or Proton Pass? Does
+    anything new that creates tabs/windows from an AI tab keep the AI/Own marking (or none)? Does a new
+    DevTools call use `cdp::request` (never a raw id)?
 
 ## Tooling
 - `cargo audit` (RustSec advisories) and `cargo deny check` at the repository root; run before bumping any crate and
@@ -122,3 +153,8 @@ unknown-git = "deny"
 9. Permission prompt for camera from a normal page in tab A while tab B is active: prompt shows only in A; remember
    unticked leaves no row in Settings > Permissions.
 10. Start as root without `--no-sandbox`: refuses.
+11. MCP: `scripts/mcp-e2e.py` (ferrite-e2e skill) covers: raw socket calls with `ferrite://`/`file:` URLs and
+    oversize lines, `location='ferrite://settings'` / `window.open` / the `about:blank` popup trick from an AI
+    tab, private-window tabs invisible, Stop mid-call, navigation of a handed-over tab to `ferrite://`,
+    isolation of cookies, download refusal, marker forgery. Run it for any change to `mcp.rs`, `cdp.rs`,
+    `on_before_browse` or tab/window creation.

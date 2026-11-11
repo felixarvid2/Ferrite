@@ -53,6 +53,14 @@ the trait: it is the method list you may override (defaults exist for the rest).
   safe) or closures that will run solely on the UI thread (`post_local`, `task.rs:194`). Never for `Rc`/`RefCell` data
   that is used from two threads. Always move it in and `into_inner()` on the target thread.
 
+## DevTools protocol and other threads
+- Send DevTools calls only through `browser/cdp.rs` (`cdp::request` for an answer, `cdp::send` fire-and-forget): one
+  shared id counter, one observer per browser, replies routed by id with a timeout and failed when the browser
+  closes. Never call `send_dev_tools_message` or add an observer yourself. A reply closure runs inside CEF's
+  observer callback: no panics, no `with_state`, hop with `later` (or send on a channel).
+- Plain `std` threads (the MCP server in `browser/mcp.rs`, `passwords.rs` CLI calls) never touch CEF objects or
+  `State`; they post a closure with `post_ui` and wait on a channel with a timeout. The UI thread never waits for them.
+
 ## State and re-entrancy
 - All browser state is the UI-thread `thread_local STATE` (`mod.rs:159`). `with_state` (`mod.rs:166`) uses `try_borrow_mut`:
   if state is already borrowed up the stack it logs and returns `None` instead of panicking.

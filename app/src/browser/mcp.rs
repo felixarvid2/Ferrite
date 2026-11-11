@@ -1196,3 +1196,108 @@ fn evaluate(nonce: &str, tab: TabId, js: String) -> Result<ToolOutput, String> {
         &policy::truncate(&text, MAX_EVAL_CHARS),
     )))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn set(id: i32, c: Control) {
+        AI_BROWSERS.with(|m| m.borrow_mut().insert(id, c));
+    }
+
+    #[test]
+    fn ai_owned_browser_cannot_leave_the_web() {
+        set(9001, Control::Own);
+        assert!(navigation_ok(9001, "https://example.com/"));
+        assert!(navigation_ok(9001, "about:blank"));
+        for bad in [
+            "ferrite://settings/",
+            "ferrite://app/chrome.html",
+            "file:///etc/passwd",
+            "chrome://version",
+            "data:text/html,x",
+            "javascript:alert(1)",
+            "view-source:https://example.com",
+        ] {
+            assert!(!navigation_ok(9001, bad), "{bad} must be blocked");
+        }
+        assert!(controlled_browser(9001));
+        browser_gone(9001);
+        assert!(!controlled_browser(9001));
+    }
+
+    #[test]
+    fn uncontrolled_browsers_are_not_restricted_here() {
+        // The general navigation guard (scheme.rs) still applies to them.
+        assert!(navigation_ok(9002, "ferrite://settings/"));
+        assert!(!controlled_browser(9002));
+    }
+
+    #[test]
+    fn handed_over_browser_may_browse_the_web() {
+        set(9003, Control::Shared);
+        assert!(navigation_ok(9003, "https://example.com/x"));
+        assert!(controlled_browser(9003));
+        browser_gone(9003);
+    }
+
+    #[test]
+    fn wire_requests_are_validated_before_anything_runs() {
+        let reply = |line: &str| -> Value { serde_json::from_str(&handle_line(line)).unwrap() };
+        let r = reply("not json");
+        assert_eq!(r["ok"], false);
+        assert_eq!(r["id"], Value::Null);
+        let r = reply(r#"{"id":4,"args":{}}"#);
+        assert_eq!(r["id"], 4);
+        assert_eq!(r["ok"], false);
+        // These never reach the UI thread (no CEF in unit tests): refused by parsing.
+        for line in [
+            r#"{"id":5,"tool":"open_tab","args":{"url":"ferrite://settings"}}"#,
+            r#"{"id":6,"tool":"navigate","args":{"tab":1,"url":"file:///etc/passwd"}}"#,
+            r#"{"id":7,"tool":"click","args":{"tab":1,"ref":"../../x"}}"#,
+            r#"{"id":8,"tool":"rm","args":{}}"#,
+            r#"{"id":9,"tool":"evaluate","args":{"tab":1}}"#,
+            r#"{"id":10,"tool":"snapshot","args":[]}"#,
+        ] {
+            let r = reply(line);
+            assert_eq!(r["ok"], false, "{line}");
+            assert!(
+                r["content"][0]["text"]
+                    .as_str()
+                    .is_some_and(|t| t.starts_with("Invalid arguments")),
+                "{line}: {r}"
+            );
+        }
+    }
+
+    #[test]
+    fn socket_path_too_long_is_reported() {
+        let long = PathBuf::from(format!("/tmp/{}/mcp.sock", "x".repeat(120)));
+        let err = start_server(&long).unwrap_err();
+        assert!(err.contains("FERRITE_MCP_SOCKET"), "{err}");
+    }
+
+    #[test]
+    fn bind_refuses_foreign_files_and_live_sockets() {
+        let dir = std::env::temp_dir().join(format!("fe-mcp-unit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A regular file is never deleted.
+        let file = dir.join("not-a-socket");
+        std::fs::write(&file, "x").unwrap();
+        assert!(bind(&file).is_err());
+        assert!(file.exists());
+        // A live socket (another instance) is not taken over; a stale one is replaced.
+        let path = dir.join("mcp.sock");
+        let first = bind(&path).expect("bind");
+        assert!(bind(&path).is_err(), "must not unlink a live socket");
+        drop(first);
+        let again = bind(&path).expect("stale socket replaced");
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        drop(again);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

@@ -119,6 +119,21 @@ low-memory phones. No Proton Pass, no extensions.
   api.github.com response (ferrite-v0.1.1, ferrite-v0.1.0, assets-large-v1) is
   parsed (ignored test `live_github` and a trimmed fixture test).
 
+### AI control (MCP)
+
+Checked with `.claude/skills/ferrite-e2e/scripts/mcp-e2e.py` (real browser under Xvfb, the `ferrite-mcp`
+binary as a stdio subprocess, a local page server; 60+ checks): protocol in both eras (`initialize`,
+`server/discover`, unsupported version error), the socket (absent while off, mode 0600, removed when
+switched off), refusal of `ferrite://`, `file:`, `javascript:` by the bridge and, for raw socket clients,
+by the browser; oversize requests; `open_tab`, `snapshot` (password values hidden), `click`, `type`
+(with Enter, select), `wait_for`, `screenshot` (PNG, also of a background tab), `back/forward/reload`,
+untrusted-content markers that page text cannot forge; `evaluate` refused until enabled; a page trying
+`location='ferrite://settings'`, `window.open` and the `about:blank` popup trick never reaches an
+internal page; the AI window has its own cookies, no history, no session entry; downloads from AI tabs
+refused; handing a tab over from the tab menu, controlling it in the profile context, the bar and badge
+(screenshots), Stop revoking at once (also a call in flight), navigation to `ferrite://` revoking, a
+sleeping handed-over tab waking, controlled tabs not sleeping, private-window tabs invisible.
+
 ### Ad blocking (scriptlets and YouTube rules)
 
 - Local mock YouTube watch page (rules rewritten from youtube.com to
@@ -238,6 +253,11 @@ low-memory phones. No Proton Pass, no extensions.
 - Single-instance relaunch forwarding (implemented, not tested).
 - Downloads "ask where" (uses CEF's dialog).
 - Multiple profiles: only through `--profile`; no UI.
+- MCP with real clients (Claude Desktop, Claude Code): only a scripted stdio client was used. The
+  2026-07-28 protocol revision was implemented from its published specification, not tested against a
+  client that speaks it. Downloads: in the test container no download completed even in a normal tab
+  (before and after this feature), so the refusal on AI tabs is verified through its log line only. Real
+  sites with iframes, shadow DOM, consent walls and heavy single-page apps; Wayland.
 
 ## Known limitations
 
@@ -522,6 +542,11 @@ low-memory phones. No Proton Pass, no extensions.
 - Single-instance relaunch forwarding (implemented, not tested).
 - Downloads "ask where" (uses CEF's dialog).
 - Multiple profiles: only through `--profile`; no UI.
+- MCP with real clients (Claude Desktop, Claude Code): only a scripted stdio client was used. The
+  2026-07-28 protocol revision was implemented from its published specification, not tested against a
+  client that speaks it. Downloads: in the test container no download completed even in a normal tab
+  (before and after this feature), so the refusal on AI tabs is verified through its log line only. Real
+  sites with iframes, shadow DOM, consent walls and heavy single-page apps; Wayland.
 
 ## Known limitations
 
@@ -577,6 +602,23 @@ low-memory phones. No Proton Pass, no extensions.
   are not applied.
 - uBO `$redirect` rules act as plain blocks; no redirect resources are served.
 - Private windows behave the same as normal windows.
+
+### AI control (MCP)
+
+- The AI is as safe as the client: page text is marked untrusted, but a model can still be talked into
+  harmful actions on a handed-over tab (that tab is logged in as you). Hand over only what you would let
+  an assistant do. `evaluate`, when enabled, can read everything on the page.
+- Pages and snapshots cover the main frame only (no iframe content, no clicks inside frames, no
+  cross-origin or closed shadow DOM). No file upload, no dialogs (`alert` blocks DevTools calls until they
+  time out), no keyboard shortcuts, drag and drop, hover, scrolling tool, tab switching in the user's UI
+  beyond what `click`/`screenshot` need (they bring the tab to the front of its window).
+- Tools are executed one at a time per connection; `notifications/cancelled` is not acted on (calls are
+  bounded by timeouts: DevTools 15 s, `wait_for` at most 30 s).
+- Downloads and permission prompts are denied on controlled tabs, including for a handed-over tab while
+  you use it yourself. Proton Pass fill, 2FA and save prompts are off there.
+- The AI window's context is in memory: logins made by the AI are lost when its last window closes.
+- Linux only (Unix socket). The AppImage's `ferrite-mcp` path changes with every run.
+- The AI window is not restored and not counted as "the last window" for session saving.
 
 ### Not implemented
 

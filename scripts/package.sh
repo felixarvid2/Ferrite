@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build installable Linux packages from the release bundle:
-#   dist/ferrite_<version>_amd64.deb         (installs to /opt/ferrite)
+#   dist/ferrite_<version>_amd64.deb         (installs to /opt/ferrite; /usr/bin/ferrite and /usr/bin/ferrite-mcp)
 #   dist/Ferrite-<version>-x86_64.AppImage   (single file, no install)
 #
 #   scripts/package.sh [--deb-only|--appimage-only]
@@ -60,6 +60,8 @@ if [ "$WANT_DEB" = 1 ]; then
   mkdir -p "$DEB/opt" "$DEB/DEBIAN"
   cp -a "$BUNDLE" "$DEB/opt/ferrite"
   install -Dm755 packaging/ferrite-launcher.sh "$DEB/usr/bin/ferrite"
+  # MCP bridge for AI clients (see README): /usr/bin/ferrite-mcp
+  ln -s /opt/ferrite/ferrite-mcp "$DEB/usr/bin/ferrite-mcp"
   install -Dm644 packaging/ferrite.desktop "$DEB/usr/share/applications/ferrite.desktop"
   install -Dm644 packaging/apparmor-ferrite "$DEB/etc/apparmor.d/ferrite"
   install -Dm644 LICENSE "$DEB/usr/share/doc/ferrite/copyright"

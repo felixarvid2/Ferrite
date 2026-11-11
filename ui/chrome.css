@@ -167,8 +167,9 @@ button { cursor: default; }
 .pbtn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 #crashbar { color: var(--ink); }
 #crashbar svg { color: var(--danger); }
-#aibar { background: color-mix(in srgb, var(--accent) 24%, var(--bar)); border-top: 2px solid var(--accent); color: var(--ink); font-weight: 500; }
-#aibar svg { color: var(--accent); }
+#aibar { background: color-mix(in srgb, #4fd1c5 24%, var(--bar)); border-top: 2px solid #4fd1c5; color: var(--ink); font-weight: 500; }
+#aibar svg { color: #4fd1c5; }
+#aibar .pbtn.primary { background: #4fd1c5; color: #052321; }
 #ai-badge { margin: 0 4px 9px 8px; padding: 3px 10px 3px 8px; border-radius: 12px; display: flex; gap: 6px; align-items: center;
   background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--ink); font-size: 12px; align-self: flex-end; }
 .tab-ai { flex: none; font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 1px 5px; border-radius: 8px; background: #4fd1c5; color: #052321; }

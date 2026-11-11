@@ -264,7 +264,12 @@ wrap_download_handler! {
             // No downloads from tabs the AI controls: a page the AI visits
             // must not put files on the user's disk.
             let id = browser.map(|b| b.identifier()).unwrap_or(-1);
-            (!super::mcp::controlled_browser(id)) as i32
+            if super::mcp::controlled_browser(id) {
+                tracing::info!("refused a download from an AI-controlled tab");
+                0
+            } else {
+                1
+            }
         }
 
         fn on_before_download(
