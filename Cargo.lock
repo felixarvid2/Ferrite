@@ -530,6 +530,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "cef",
+ "dirs",
  "ferrite-core",
  "libc",
  "serde",

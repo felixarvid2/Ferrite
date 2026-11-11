@@ -12,6 +12,7 @@ async function load() {
   renderExceptions();
   loadPerms();
   loadPass();
+  loadImport();
   const a = await api("about");
   document.getElementById("about").textContent = `Ferrite ${a.ferrite} · Chromium ${a.chromium} · CEF ${a.cef}` + (a.sandbox ? "" : " · sandbox disabled");
 }
@@ -48,6 +49,50 @@ async function loadPass(refresh) {
   box.style.color = r.status === "error" || r.status === "not_installed" ? "var(--danger)" : "";
   document.getElementById("pass-refresh").disabled = !r.enabled;
   if (r.status === "loading") passTimer = setTimeout(loadPass, 800);
+}
+const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+async function loadImport() {
+  const box = document.getElementById("import-sources");
+  let list;
+  try { list = await api("import_sources"); } catch (e) { list = []; }
+  if (!list.length) {
+    box.replaceChildren(el("div", { class: "empty compact" }, el("div", { text: "No Chrome, Chromium, Brave, Edge, Vivaldi or Firefox profiles found." })));
+    return;
+  }
+  box.replaceChildren(...list.map(src => {
+    const bm = el("input", { type: "checkbox" });
+    const hi = el("input", { type: "checkbox" });
+    bm.checked = src.has_bookmarks; bm.disabled = !src.has_bookmarks;
+    hi.checked = src.has_history; hi.disabled = !src.has_history;
+    const result = el("div", { class: "desc", role: "status" });
+    const btn = el("button", { class: "btn sm", text: "Import" });
+    btn.onclick = async () => {
+      if (!bm.checked && !hi.checked) { result.textContent = "Choose bookmarks or history."; return; }
+      const all = document.querySelectorAll("#import-sources .btn");
+      all.forEach(b => b.disabled = true); result.textContent = "Importing…";
+      try {
+        await api("import_run", { source: src.id, bookmarks: bm.checked, history: hi.checked });
+        result.textContent = await pollImport();
+      } catch (e) { result.textContent = "Import failed: " + e.message; }
+      all.forEach(b => b.disabled = false);
+    };
+    return el("div", { class: "row", "data-source": src.id },
+      el("div", { class: "grow" }, el("div", { text: `${src.browser} · ${src.profile_name}` }), result),
+      el("label", {}, bm, "Bookmarks"), el("label", {}, hi, "History"), btn);
+  }));
+}
+async function pollImport() {
+  for (;;) {
+    const st = await api("import_status");
+    if (st.state === "done") {
+      const c = st.counts, parts = [];
+      if (c.bookmarks || !c.history) parts.push(`${fmtNum(c.bookmarks)} bookmarks`);
+      if (c.history) parts.push(`${fmtNum(c.history)} history entries`);
+      return `Imported ${parts.join(" and ")}` + (c.skipped ? ` (${fmtNum(c.skipped)} already present, skipped)` : "") + ".";
+    }
+    if (st.state === "error") return "Import failed: " + st.message;
+    await new Promise(r => setTimeout(r, 400));
+  }
 }
 document.getElementById("pass-refresh").onclick = () => loadPass(true);
 for (const input of document.querySelectorAll("[data-key]")) {

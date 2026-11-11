@@ -49,6 +49,9 @@
     <div class="row"><div class="grow"><div>pass-cli path</div><div class="desc">Leave empty to look in PATH, then ~/.local/bin.</div></div><input data-key="proton_pass_cli" style="width:280px" placeholder="auto" spellcheck="false"></div>
     <div class="row"><div class="grow"><div id="pass-status">&nbsp;</div><div class="desc">Install pass-cli and run <code>pass-cli login</code> once (needs a Proton Pass plan with CLI access).</div></div><button class="btn sm" id="pass-refresh">Refresh</button></div>
   </div>
+  <h2>Import</h2>
+  <p class="section-desc">Bring bookmarks and history from other browsers on this computer. Passwords are not imported (the other browser encrypts them).</p>
+  <div class="card" id="import-sources"></div>
   <h2>Performance</h2>
   <div class="card">
     <div class="row"><div class="grow"><div>Sleep unused background tabs</div><div class="desc">Frees memory. A sleeping tab reloads when you open it.</div></div><select data-key="tab_sleep_minutes" data-number><option value="0">Never</option><option value="15">After 15 minutes</option><option value="30">After 30 minutes</option><option value="60">After 1 hour</option><option value="240">After 4 hours</option></select></div>

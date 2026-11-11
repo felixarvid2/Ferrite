@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 ferrite-core = { path = "../core" }
+dirs.workspace = true
 # The CEF version is pinned exactly: every bump of this line is an engine
 # (Chromium) update, see docs/ENGINE_UPDATES.md.
 cef = { version = "=156.4.0", default-features = false, features = ["sandbox"] }

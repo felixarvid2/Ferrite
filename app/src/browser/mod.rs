@@ -12,6 +12,7 @@ pub mod commands;
 pub mod context_menu;
 pub mod downloads;
 pub mod handlers;
+pub mod import;
 pub mod inject;
 pub mod menu;
 pub mod passwords;

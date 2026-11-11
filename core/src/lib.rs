@@ -7,6 +7,7 @@ pub mod commands;
 pub mod db;
 pub mod downloads;
 pub mod history;
+pub mod importer;
 pub mod omnibox;
 pub mod passcli;
 pub mod permissions;

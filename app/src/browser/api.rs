@@ -2,8 +2,8 @@
 //! Only reachable from ferrite:// documents (see `scheme`).
 
 use super::{
-    commands, downloads, menu, passwords, permissions, tabs, window, BrowserRef, State, WinId,
-    NEW_TAB_URL,
+    commands, downloads, import, menu, passwords, permissions, tabs, window, BrowserRef, State,
+    WinId, NEW_TAB_URL,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use cef::*;
@@ -490,6 +490,19 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             passwords::settings_changed(s, was_pass, &old_cli);
             s.mark_all_dirty();
             serde_json::to_value(&s.settings)?
+        }
+        // ---- import from other browsers ---------------------------------
+        "import_sources" => import::sources()?,
+        "import_status" => import::status(),
+        "import_run" => {
+            if private {
+                bail!("Import is not available in private windows");
+            }
+            import::run(
+                arg_str(&args, "source")?,
+                arg_bool(&args, "bookmarks"),
+                arg_bool(&args, "history"),
+            )?
         }
         "permissions_list" => serde_json::to_value(s.db.list_permissions()?)?,
         "permission_remove" => {

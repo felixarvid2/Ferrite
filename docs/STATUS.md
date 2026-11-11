@@ -69,6 +69,18 @@ Network traffic went through an HTTPS-intercepting proxy.
 - A 1.8 MB `.deb` download from GitHub completes; the downloads page shows the
   dangerous-file warning.
 
+### Import from other browsers
+
+- Settings > Import lists Chrome, Chromium, Brave, Edge, Vivaldi and Firefox
+  profiles found under `$HOME` (including snap and flatpak paths). Verified in a
+  real window with fake Chrome and Firefox profiles in a temporary `HOME`
+  (`scripts/import-fixtures.py`): bookmarks arrive under "Imported from <browser>" on
+  the bookmarks bar with their folders, history keeps its original times, a second
+  import adds nothing, and the page shows the counts. Not verified against real,
+  running browsers. Passwords are not imported. Only http(s) URLs; history is
+  limited to the newest 20 000 entries from the last 365 days. Source databases
+  are copied (with `-wal`) before reading. Not available from private windows.
+
 ### Privacy
 
 - Private window isolation: cookies and localStorage from the private window are
@@ -254,7 +266,6 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 - A built-in password manager (saving passwords). Ferrite fills from Proton
   Pass only; it does not save new passwords.
-- Import from Chrome or Firefox.
 - Extensions.
 - Spell-check UI.
 - Reader mode.
@@ -319,10 +330,8 @@ In priority order:
    No homemade cryptography.
 3. Overlay suggestions dropdown (CEF overlay view) and a download shelf.
 4. Document a proprietary-codec CEF build option.
-5. Import bookmarks and history from Chrome and Firefox: copy the database files
-   (including WAL), then read the copies with rusqlite.
-6. Packaging: `.deb` or AppImage, desktop file, and registration as the default
+5. Packaging: `.deb` or AppImage, desktop file, and registration as the default
    browser through xdg.
-7. macOS and Windows ports.
-8. Per-site settings UI (zoom, JavaScript, cookies).
-9. `beforeunload` handling when a window closes or a tab sleeps.
+6. macOS and Windows ports.
+7. Per-site settings UI (zoom, JavaScript, cookies).
+8. `beforeunload` handling when a window closes or a tab sleeps.

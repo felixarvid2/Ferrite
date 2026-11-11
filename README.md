@@ -21,6 +21,8 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 - Tab sleeping unloads idle background tabs to save memory.
 - Proton Pass logins can be filled through Proton's `pass-cli` (Settings >
   Passwords).
+- Bookmarks and history can be imported from Chrome, Chromium, Brave, Edge, Vivaldi
+  and Firefox profiles (Settings > Import). Passwords are not imported.
 - Ad and tracker blocking uses EasyList, EasyPrivacy and uBlock Origin's lists
   and scriptlets. It is on by default for new profiles (Settings > Privacy).
   See [docs/STATUS.md](docs/STATUS.md) for limits.
@@ -189,6 +191,7 @@ Cargo.toml            workspace (members: core, app)
 core/                 ferrite-core: pure Rust, no CEF
   src/db.rs           SQLite access (rusqlite, bundled)
   src/history.rs, bookmarks.rs, permissions.rs, downloads.rs
+  src/importer.rs     read and apply bookmarks/history from Chrome-family browsers and Firefox
   src/omnibox.rs      address bar input resolution and inline completion
   src/search.rs       search engine definitions and URL templates
   src/session.rs      session JSON with atomic writes
