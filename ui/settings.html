@@ -41,6 +41,13 @@
     <div class="row"><div class="grow"><div>Send Do Not Track</div><div class="desc">Asks sites not to track or sell your data (sends Do Not Track and Global Privacy Control).</div></div><input type="checkbox" class="switch" data-key="send_do_not_track"></div>
     <div class="row"><div class="grow"><div>Block ads and trackers</div><div class="desc">Uses EasyList and EasyPrivacy, updated every few days.</div></div><input type="checkbox" class="switch" data-key="adblock_enabled"></div>
   </div>
+  <h2>Passwords</h2>
+  <p class="section-desc">Fill logins from Proton Pass with the official pass-cli tool. Passwords are fetched only when you choose a login and are never stored by Ferrite.</p>
+  <div class="card">
+    <div class="row"><div class="grow"><div>Proton Pass</div><div class="desc">Show a key button in the address bar on pages you have a login for.</div></div><input type="checkbox" class="switch" data-key="proton_pass"></div>
+    <div class="row"><div class="grow"><div>pass-cli path</div><div class="desc">Leave empty to look in PATH, then ~/.local/bin.</div></div><input data-key="proton_pass_cli" style="width:280px" placeholder="auto" spellcheck="false"></div>
+    <div class="row"><div class="grow"><div id="pass-status">&nbsp;</div><div class="desc">Install pass-cli and run <code>pass-cli login</code> once (needs a Proton Pass plan with CLI access).</div></div><button class="btn sm" id="pass-refresh">Refresh</button></div>
+  </div>
   <h2>Performance</h2>
   <div class="card">
     <div class="row"><div class="grow"><div>Sleep unused background tabs</div><div class="desc">Frees memory. A sleeping tab reloads when you open it.</div></div><select data-key="tab_sleep_minutes" data-number><option value="0">Never</option><option value="15">After 15 minutes</option><option value="30">After 30 minutes</option><option value="60">After 1 hour</option><option value="240">After 4 hours</option></select></div>

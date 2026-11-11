@@ -43,6 +43,10 @@ pub struct Settings {
     pub system_titlebar: bool,
     /// Show tabs in a sidebar on the left (default) instead of above the toolbar.
     pub vertical_tabs: bool,
+    /// Offer logins from Proton Pass through the `pass-cli` tool.
+    pub proton_pass: bool,
+    /// Path of `pass-cli`; empty = look in PATH, then ~/.local/bin.
+    pub proton_pass_cli: String,
 }
 
 impl Default for Settings {
@@ -67,6 +71,8 @@ impl Default for Settings {
             tab_sleep_minutes: 60,
             system_titlebar: false,
             vertical_tabs: true,
+            proton_pass: false,
+            proton_pass_cli: String::new(),
         }
     }
 }
@@ -119,6 +125,7 @@ mod tests {
         assert_eq!(s.homepage, "ferrite://newtab/");
         assert!(s.show_bookmarks_bar && s.restore_after_crash);
         assert_eq!(s.default_zoom_percent, 100);
+        assert!(!s.proton_pass && s.proton_pass_cli.is_empty());
         assert!(!s.download_dir.is_empty());
     }
 

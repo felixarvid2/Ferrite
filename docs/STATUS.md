@@ -215,6 +215,25 @@ Network traffic went through an HTTPS-intercepting proxy.
   may still refuse a non-Chrome browser; Netflix/Spotify/Disney+ were not
   tested (no accounts).
 
+### Proton Pass
+
+- Fills logins from Proton Pass through Proton's official `pass-cli`
+  (Settings > Passwords; run `pass-cli login` once; needs a Proton Pass plan
+  with CLI access). The browser extension cannot run in CEF.
+- Verified with a fake `pass-cli` only (no Proton account in the dev
+  container): the key button appears on a matching site, the native menu
+  lists "username — title", choosing it fills username and password and fires
+  input/change events; no fill on a non-matching host, none when the page
+  navigated while pass-cli ran; not-logged-in and missing-binary states show
+  in Settings; web pages cannot call the pass API.
+- Not verified: the real pass-cli JSON (the parser accepts both plausible
+  shapes), React-heavy login pages, logins inside iframes (only the main frame
+  is filled), TOTP codes (not implemented), saving new logins (not
+  implemented).
+- Matching: same host or a subdomain of the saved URL's host (ports ignored);
+  an https login is never filled into an http page. The fill runs in the
+  page, so the page can read the password once filled (as with any autofill).
+
 ### Ad blocking
 
 - Real YouTube is not verified: www.youtube.com is blocked from the test
@@ -232,7 +251,8 @@ Network traffic went through an HTTPS-intercepting proxy.
 
 ### Not implemented
 
-- Password manager.
+- A built-in password manager (saving passwords). Ferrite fills from Proton
+  Pass only; it does not save new passwords.
 - Import from Chrome or Firefox.
 - Extensions.
 - Spell-check UI.

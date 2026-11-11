@@ -8,6 +8,7 @@ pub mod db;
 pub mod downloads;
 pub mod history;
 pub mod omnibox;
+pub mod passcli;
 pub mod permissions;
 pub mod profile;
 pub mod search;

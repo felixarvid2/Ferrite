@@ -14,6 +14,7 @@ pub mod downloads;
 pub mod handlers;
 pub mod inject;
 pub mod menu;
+pub mod passwords;
 pub mod permissions;
 pub mod scheme;
 pub mod session;
@@ -158,6 +159,8 @@ pub struct State {
     /// Live CEF browsers (tabs + UI); the app quits when this and the
     /// window list are both empty.
     pub live_browsers: usize,
+    /// Proton Pass login cache (no passwords).
+    pub passwords: passwords::Store,
 }
 
 thread_local! {
@@ -251,6 +254,7 @@ pub fn start() {
         session_frozen: false,
         last_window_focus: None,
         live_browsers: 0,
+        passwords: passwords::Store::default(),
     };
     STATE.with(|cell| *cell.borrow_mut() = Some(state));
 
@@ -263,6 +267,9 @@ pub fn start() {
     }
     schedule_housekeeping();
     with_state(|s| {
+        if s.settings.proton_pass {
+            passwords::tick(s);
+        }
         theme::apply_to_context(s, None);
         session::restore_or_open(s, &launch);
     });
@@ -276,6 +283,7 @@ fn state_dnt() -> bool {
 fn schedule_housekeeping() {
     engine::post_local_delayed(60_000, || {
         with_state(tabs::sleep_idle_tabs);
+        with_state(passwords::tick);
         schedule_housekeeping();
     });
 }

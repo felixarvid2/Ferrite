@@ -141,6 +141,7 @@ function renderNav() {
   zoom.hidden = !nav.zoom || nav.zoom === 100;
   zoom.textContent = (nav.zoom || 100) + "%";
   $("star").classList.toggle("on", !!nav.bookmarked);
+  $("pass").hidden = !state.passwords;
   $("star").hidden = state.private || !nav.url || nav.url.startsWith("ferrite:");
   const p = $("progress");
   p.classList.toggle("on", !!nav.loading);
@@ -265,6 +266,7 @@ $("forward").onclick = () => cmd("forward");
 $("reload").onclick = e => cmd(state && state.nav && state.nav.loading ? "stop" : (e.shiftKey ? "hard_reload" : "reload"));
 $("home").onclick = () => cmd("home");
 $("star").onclick = () => api("toggle_bookmark").then(added => added != null && ferrite.toast(added ? "Bookmark added" : "Bookmark removed"));
+$("pass").onclick = () => { const r = $("pass").getBoundingClientRect(); api("password_menu", { x: Math.round(r.right), y: Math.round(r.bottom) }); };
 $("downloads").onclick = () => cmd("downloads");
 $("zoom").onclick = () => cmd("zoom_reset");
 $("menu").onclick = () => { const r = $("menu").getBoundingClientRect(); api("menu", { x: Math.round(r.right), y: Math.round(r.bottom) }); };

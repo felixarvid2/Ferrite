@@ -2,7 +2,8 @@
 //! Only reachable from ferrite:// documents (see `scheme`).
 
 use super::{
-    commands, downloads, menu, permissions, tabs, window, BrowserRef, State, WinId, NEW_TAB_URL,
+    commands, downloads, menu, passwords, permissions, tabs, window, BrowserRef, State, WinId,
+    NEW_TAB_URL,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use cef::*;
@@ -100,6 +101,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "closed_tabs": w.closed_tabs.len(),
         "frameless": !s.settings.system_titlebar,
         "vertical_tabs": w.side_view.is_some(),
+        "passwords": active.map_or(0, |t| s.passwords.count_for(&t.url)),
         "maximized": w.window.as_ref().is_some_and(|w| w.is_maximized() != 0),
     })
 }
@@ -114,6 +116,7 @@ const UI_ONLY: &[&str] = &[
     "move_tab",
     "pin_tab",
     "permission",
+    "password_menu",
 ];
 
 /// Reject tab ids that belong to another window (or to no tab at all).
@@ -272,6 +275,21 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
             );
             Value::Null
         }
+        "password_menu" => {
+            passwords::show_menu(
+                s,
+                win,
+                arg_i64(&args, "x")? as i32,
+                arg_i64(&args, "y")? as i32,
+            );
+            passwords::tick(s);
+            Value::Null
+        }
+        "pass_status" => passwords::status_json(s),
+        "pass_refresh" => {
+            passwords::refresh(s, true);
+            passwords::status_json(s)
+        }
         "find" => {
             let tab = active.context("no tab")?;
             commands::find(
@@ -414,6 +432,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         }),
         "settings_set" => {
             let before_theme = s.settings.theme;
+            let (was_pass, old_cli) = (s.settings.proton_pass, s.settings.proton_pass_cli.clone());
             s.settings
                 .apply_patch(args.get("patch").unwrap_or(&Value::Null))?;
             s.save_settings();
@@ -443,6 +462,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
                     super::theme::apply_to_context(s, Some(&ctx));
                 }
             }
+            passwords::settings_changed(s, was_pass, &old_cli);
             s.mark_all_dirty();
             serde_json::to_value(&s.settings)?
         }

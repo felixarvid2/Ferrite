@@ -19,6 +19,8 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 - Private windows use an in-memory profile that is discarded when the last
   private window closes.
 - Tab sleeping unloads idle background tabs to save memory.
+- Proton Pass logins can be filled through Proton's `pass-cli` (Settings >
+  Passwords).
 - Ad and tracker blocking uses EasyList, EasyPrivacy and uBlock Origin's lists
   and scriptlets. It is on by default for new profiles (Settings > Privacy).
   See [docs/STATUS.md](docs/STATUS.md) for limits.
