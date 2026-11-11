@@ -744,17 +744,28 @@ fn finish_totp(
             win,
             code: code.clone(),
         };
-        match super::inject::evaluate(&mut browser, &otp_script(&code)) {
-            Some(id) => {
-                EVALS.with(|e| e.borrow_mut().insert(id, job));
-                // No answer from DevTools: treat as "not filled".
-                engine::post_local_delayed(5000, move || {
-                    if let Some(job) = EVALS.with(|e| e.borrow_mut().remove(&id)) {
-                        later(move |s| otp_done(s, job, false));
-                    }
-                });
+        // The answer (or a timeout: "not filled") comes through the shared
+        // DevTools layer; `otp_done` runs on a clean stack.
+        let slot = std::rc::Rc::new(RefCell::new(Some(job)));
+        let reply_slot = slot.clone();
+        let sent = super::inject::evaluate(
+            &mut browser,
+            &otp_script(&code),
+            Box::new(move |_, res| {
+                let Some(job) = reply_slot.borrow_mut().take() else {
+                    return;
+                };
+                let filled = res
+                    .ok()
+                    .and_then(|v| v.pointer("/result/value").and_then(Value::as_bool))
+                    == Some(true);
+                later(move |s| otp_done(s, job, filled));
+            }),
+        );
+        if !sent {
+            if let Some(job) = slot.borrow_mut().take() {
+                later(move |s| otp_done(s, job, false));
             }
-            None => later(move |s| otp_done(s, job, false)),
         }
     });
 }
@@ -763,26 +774,6 @@ fn finish_totp(
 struct OtpJob {
     win: WinId,
     code: String,
-}
-
-thread_local! {
-    /// DevTools message id of the OTP script -> job.
-    static EVALS: RefCell<HashMap<i32, OtpJob>> = RefCell::new(HashMap::new());
-}
-
-/// A DevTools method result arrived: if it answers an OTP script, handle it
-/// and return true.
-pub fn eval_result(message_id: i32, success: bool, result: &[u8]) -> bool {
-    let Some(job) = EVALS.with(|e| e.borrow_mut().remove(&message_id)) else {
-        return false;
-    };
-    let filled = success
-        && serde_json::from_slice::<Value>(result)
-            .ok()
-            .and_then(|v| v.pointer("/result/value").and_then(Value::as_bool))
-            == Some(true);
-    later(move |s| otp_done(s, job, filled));
-    true
 }
 
 fn otp_done(s: &mut State, job: OtpJob, filled: bool) {

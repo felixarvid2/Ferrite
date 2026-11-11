@@ -8,6 +8,7 @@
 
 pub mod api;
 pub mod assets;
+pub mod cdp;
 pub mod commands;
 pub mod context_menu;
 pub mod downloads;
