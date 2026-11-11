@@ -108,8 +108,16 @@ let themePref = "dark";
 try { const c = localStorage.getItem("ferrite-theme"); if (c) { themePref = c; applyTheme(c); } } catch (_) {}
 // Follow OS changes live when the preference is "system".
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (themePref === "system") applyTheme("system"); });
+// With vertical tabs the window already has a sidebar, so internal pages
+// switch their navigation to a row of pills above the content.
+function applyNavLayout(vertical) {
+  document.documentElement.toggleAttribute("data-topnav", !!vertical);
+  try { localStorage.setItem("ferrite-topnav", vertical ? "1" : "0"); } catch (_) {}
+}
+try { if (localStorage.getItem("ferrite-topnav") === "1") document.documentElement.setAttribute("data-topnav", ""); } catch (_) {}
 api("settings_get").then(r => {
   themePref = r.settings.theme; applyTheme(themePref);
+  applyNavLayout(r.settings.vertical_tabs);
   try { localStorage.setItem("ferrite-theme", r.settings.theme); } catch (_) {}
 }).catch(() => {});
 

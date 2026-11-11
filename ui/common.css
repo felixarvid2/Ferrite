@@ -147,3 +147,13 @@ label { display: inline-flex; align-items: center; cursor: pointer; }
   mask-image: linear-gradient(to bottom, #000 35%, transparent), linear-gradient(to right, transparent 42%, #000 62%, #000 90%, transparent);
   mask-composite: intersect; }
 .shell > main.page > :not(.page-field) { position: relative; z-index: 1; }
+
+/* Internal-page navigation as a pill row (used with vertical tabs, where a
+   second sidebar would sit right next to the tab sidebar). */
+:root[data-topnav] .shell { display: block; }
+:root[data-topnav] .sidebar { position: static; height: auto; width: auto; max-width: 880px; margin: 0 auto;
+  flex-direction: row; align-items: center; gap: 4px; padding: 18px 24px 0; border: 0; background: none; }
+:root[data-topnav] .sidebar .brand { margin: 0 12px 0 0; padding: 4px 6px; }
+:root[data-topnav] .sidebar a.nav { min-height: 32px; padding: 5px 12px; border-radius: 16px; gap: 8px; }
+:root[data-topnav] .sidebar a.nav svg { width: 16px; height: 16px; }
+:root[data-topnav] .shell > main.page { padding-top: 20px; }
