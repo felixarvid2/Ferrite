@@ -4,9 +4,9 @@ import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Asks GitHub once a day whether a newer `ferrite-android-v*` release exists. Nothing is downloaded or installed. */
+/** Asks GitHub once a day whether a newer `ferrite-v*` release with an APK exists. Nothing is downloaded or installed. */
 object UpdateChecker {
-    const val TAG_PREFIX = "ferrite-android-v"
+    const val TAG_PREFIX = "ferrite-v"
     const val INTERVAL_MS = 24L * 3600 * 1000
     private const val MAX_BODY = 1024 * 1024
 
@@ -14,7 +14,7 @@ object UpdateChecker {
 
     fun isDue(last: Long, now: Long): Boolean = last <= 0 || now < last || now - last >= INTERVAL_MS
 
-    /** Newest published `ferrite-android-v*` release newer than [current]; the link is the APK if the release has one, else its page. */
+    /** Newest published `ferrite-v*` release newer than [current] that has an APK (desktop-only releases are skipped); the link is the APK. */
     fun newest(json: String, current: String): Release? {
         val arr = JSONArray(json)
         var best: Release? = null
@@ -26,7 +26,7 @@ object UpdateChecker {
             val version = tag.removePrefix(TAG_PREFIX)
             if (!Urls.isNewer(version, current)) continue
             if (best != null && !Urls.isNewer(version, best.version)) continue
-            var link = r.optString("html_url")
+            var link = ""
             val assets = r.optJSONArray("assets")
             if (assets != null) {
                 for (j in 0 until assets.length()) {
