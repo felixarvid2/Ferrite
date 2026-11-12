@@ -24,6 +24,13 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
 - Shield button: blocked-request count and "turn off blocking on this site".
 - Update check: "Update available" in the menu and on ferrite://about/
   (once a day, can be turned off).
+- AI control over MCP (new in 0.3.0, off by default): Settings > AI control
+  (MCP), then add `/usr/bin/ferrite-mcp` as an MCP server in Claude Desktop,
+  Claude Code or another client. The AI works in its own isolated AI window,
+  or in a tab you hand over from the tab menu; a bar with a Stop button shows
+  when it is in control. It can never reach ferrite:// pages, settings,
+  downloads, Proton Pass or private windows. `evaluate` (custom JavaScript) is
+  refused unless enabled separately.
 - Widevine DRM (downloaded by Chromium on first run, active after a restart).
 
 ## Known limitations
@@ -32,6 +39,10 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   `docs/CODECS.md` for a codec build.
 - YouTube ad blocking and Proton Pass were tested against local mock pages,
   not against the real services.
+- MCP control was tested with a scripted MCP client, not yet with Claude
+  Desktop or Claude Code. Linux only (Unix socket).
+- Installed 0.2.0 and older check for updates in the old repository
+  (felixarvid2/test) and will not see this release; install it manually once.
 - See `docs/STATUS.md` for everything verified and not verified.
 
-This is an early release (0.2.0).
+This is an early release (0.3.0). Ferrite now lives in https://github.com/felixarvid2/Ferrite.
