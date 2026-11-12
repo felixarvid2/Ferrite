@@ -8,4 +8,4 @@ First release of the Android browser, built on Android System WebView (Chromium)
 - No Proton Pass, no extensions.
 
 Install: download `Ferrite-0.1.0.apk` and open it. Android asks once to allow installs from your browser or file manager.
-Check the download against `SHA256SUMS`. If you installed an APK from an earlier build signed with a different key, uninstall it first (see README, "Signing").
+Check the download against `Ferrite-<version>.apk.sha256`. If you installed an APK from an earlier build signed with a different key, uninstall it first (see README, "Signing").

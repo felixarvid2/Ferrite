@@ -15,7 +15,7 @@ codecs come from the device, so there are no codec variants.
   following the system (WebView algorithmic darkening).
 - Ad and tracker blocking like the desktop browser (see below).
 - Update check: once a day (setting, default on) the app asks the GitHub releases API for the
-  newest `ferrite-android-v*` release and shows "Update available" in the menu. It links to the APK;
+  newest `ferrite-v*` release that has an APK and shows "Update available" in the menu. It links to the APK;
   nothing is installed silently.
 
 ## Security choices
@@ -83,7 +83,7 @@ Emulator test: `./gradlew connectedDebugAndroidTest` (needs a device/emulator).
 `resources/adblock/**` or the workflow: Rust fmt/clippy/tests, the NDK build, Kotlin unit tests, the
 release APK, and an emulator smoke test (API 34, x86_64). **It publishes only** when started manually
 (Actions > ferrite-android > Run workflow) with `publish` ticked: it creates the GitHub release
-`ferrite-android-v<ferriteVersion>` (version in `gradle.properties`) with `Ferrite-<version>.apk`, `SHA256SUMS`
+`ferrite-v<ferriteVersion>` (version in `gradle.properties`, kept equal to the desktop version; the APK is added to the existing desktop release, which is created if missing) with `Ferrite-<version>.apk`, `Ferrite-<version>.apk.sha256`
 and the notes from `RELEASE_NOTES.md`. Bump `ferriteVersion` and edit `RELEASE_NOTES.md` first; the version
 code is derived from it.
 

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publish a GitHub release ferrite-android-v<version> with the signed APK"
+        description: "Attach the signed APK to the ferrite-v<version> release (created if missing)"
         type: boolean
         default: false
 
@@ -141,11 +141,11 @@ jobs:
           cd "$RUNNER_TEMP/out"
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
           "$apksigner" verify --verbose --print-certs "Ferrite-$v.apk"
-          sha256sum "Ferrite-$v.apk" > SHA256SUMS
+          sha256sum "Ferrite-$v.apk" > "Ferrite-$v.apk.sha256"
           size=$(stat -c %s "Ferrite-$v.apk")
           unzip -l "Ferrite-$v.apk" | grep -E "\.so$|classes|assets/" || true
           echo "APK: Ferrite-$v.apk, $size bytes" | tee -a "$GITHUB_STEP_SUMMARY"
-          cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          cat "Ferrite-$v.apk.sha256" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -194,16 +194,24 @@ jobs:
         with:
           name: ferrite-android-apk
           path: out
-      - name: Create the release
+      - name: Attach the APK to the release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.android.outputs.version }}
           GENERATED_KEY: ${{ needs.android.outputs.generated_key }}
         run: |
-          tag="ferrite-android-v$VERSION"
-          cp android/RELEASE_NOTES.md notes.md
-          if [ "$GENERATED_KEY" = "true" ]; then
-            printf '\n**Warning:** this APK is signed with a throw-away key, so it cannot update (or be updated by) APKs from other builds. Uninstall before installing another build.\n' >> notes.md
+          # One release per version for desktop and Android: ferrite-v<version>.
+          tag="ferrite-v$VERSION"
+          files=("out/Ferrite-$VERSION.apk" "out/Ferrite-$VERSION.apk.sha256")
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+            notes="$(gh release view "$tag" --json body -q .body)"
+          else
+            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
+              --title "Ferrite $tag" --notes-file android/RELEASE_NOTES.md
+            notes="$(cat android/RELEASE_NOTES.md)"
           fi
-          gh release create "$tag" "out/Ferrite-$VERSION.apk" out/SHA256SUMS \
-            --target "$GITHUB_SHA" --title "Ferrite for Android $VERSION" --notes-file notes.md
+          if [ "$GENERATED_KEY" = "true" ] && ! grep -q "throw-away key" <<<"$notes"; then
+            printf '%s\n\n**Android:** this APK is signed with a throw-away key, so it cannot update (or be updated by) APKs from other builds. Uninstall before installing another build.\n' "$notes" > notes.md
+            gh release edit "$tag" --notes-file notes.md
+          fi
