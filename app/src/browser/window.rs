@@ -206,6 +206,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
         (!s.settings.system_titlebar)
             .then(|| theme::frame_color(&s.settings, init.private, init.ai)),
     );
+    install_linux_window_properties(&mut delegate);
     let window = window_create_top_level(Some(&mut delegate));
     if let Some(w) = s.windows.get_mut(&id) {
         w.window = window;
@@ -544,11 +545,53 @@ pub fn window_action(s: &mut State, win: WinId, action: &str) {
     }
 }
 
-/// Set WM_CLASS "ferrite"/"Ferrite" on the native X11 window, matching
-/// StartupWMClass in packaging/ferrite.desktop so docks show Ferrite's icon.
-/// (CEF's LinuxWindowProperties would do this, but cef-rs drops owned strings
-/// written into out-parameter structs, and Chromium's --class switch does
-/// not reach Views windows.)
+/// Desktop identity of Ferrite windows: the Wayland app_id must equal the
+/// desktop file name (ferrite.desktop) and the X11 WM_CLASS its
+/// StartupWMClass, or docks show a generic icon instead of Ferrite's.
+const APP_ID: &str = "ferrite";
+const WM_CLASS_CLASS: &str = "Ferrite";
+
+/// Make CEF ask us for the window's Linux properties through a C callback
+/// that writes the strings straight into CEF's struct. (cef-rs's wrapper for
+/// `get_linux_window_properties` drops owned strings written into the
+/// out-parameter, so its safe version always yields empty values.)
+fn install_linux_window_properties(delegate: &mut WindowDelegate) {
+    let raw = ImplWindowDelegate::get_raw(delegate);
+    if raw.is_null() {
+        return;
+    }
+    // SAFETY: `raw` is the live C struct of `delegate`; we only replace one
+    // function pointer before CEF sees the delegate.
+    unsafe {
+        (*raw).get_linux_window_properties = Some(linux_window_properties_c);
+    }
+}
+
+extern "C" fn linux_window_properties_c(
+    _self: *mut sys::_cef_window_delegate_t,
+    _window: *mut sys::_cef_window_t,
+    properties: *mut sys::_cef_linux_window_properties_t,
+) -> std::os::raw::c_int {
+    if properties.is_null() {
+        return 0;
+    }
+    // SAFETY: CEF passes a valid struct; cef_string_utf8_to_utf16 copies the
+    // text into CEF-owned memory with its own destructor, which CEF frees.
+    unsafe {
+        let p = &mut *properties;
+        let set = |field: &mut sys::cef_string_t, value: &str| {
+            sys::cef_string_utf8_to_utf16(value.as_ptr().cast(), value.len(), field);
+        };
+        set(&mut p.wayland_app_id, APP_ID);
+        set(&mut p.wm_class_name, APP_ID);
+        set(&mut p.wm_class_class, WM_CLASS_CLASS);
+    }
+    1
+}
+
+/// Belt and braces for X11: set WM_CLASS "ferrite"/"Ferrite" on the native
+/// window directly too (install_linux_window_properties covers X11 and
+/// Wayland through CEF; this only matters if CEF ever ignores it).
 #[cfg(target_os = "linux")]
 fn set_wm_class(window: &Window) {
     use std::ffi::CString;
