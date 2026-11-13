@@ -296,6 +296,8 @@ For the engine update procedure see [docs/ENGINE_UPDATES.md](docs/ENGINE_UPDATES
 - The `cef` Rust bindings (tauri-apps/cef-rs) are licensed under Apache-2.0 or
   MIT.
 - Other Rust dependencies have their own licenses; see `Cargo.lock`.
+- The UI uses IBM Plex Sans and IBM Plex Mono (`ui/fonts/`, SIL Open Font License 1.1, copyright IBM Corp.;
+  licence text in `ui/fonts/OFL.txt`, shipped in the bundle as `LICENSE-IBM-Plex-OFL.txt`). They are embedded in the binary and served from `ferrite://app/fonts/`.
 - uBlock Origin's scriptlets (`resources/adblock/ubo-scriptlets.json`) are GPL-3.0;
   they are a separate data file loaded at runtime, shipped with their licence
   in `adblock/` of the bundle. See `resources/adblock/README.md`.

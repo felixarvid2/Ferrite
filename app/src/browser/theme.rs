@@ -5,11 +5,12 @@ use super::State;
 use cef::*;
 use ferrite_core::settings::{Settings, Theme};
 
-/// ARGB colour painted before content arrives.
+/// ARGB colour painted before content arrives (the `editor` colour of the
+/// Skymning/Gryning palette in ui/common.css).
 pub fn window_background(settings: &Settings) -> u32 {
     match settings.theme {
-        Theme::Light => 0xFFFF_FFFF,
-        _ => 0xFF20_2124,
+        Theme::Light => 0xFFF7_F9FB,
+        _ => 0xFF16_1E2A,
     }
 }
 
@@ -19,8 +20,8 @@ pub fn frame_color(settings: &Settings, private: bool, ai: bool) -> u32 {
     match (private, settings.theme) {
         (true, _) => 0xFF1A_1325,
         (false, _) if ai => 0xFF0E_2B2B,
-        (false, Theme::Light) => 0xFFDD_E1E8,
-        _ => 0xFF14_1518,
+        (false, Theme::Light) => 0xFFE4_E9F0,
+        _ => 0xFF10_161F,
     }
 }
 

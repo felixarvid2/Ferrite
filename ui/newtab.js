@@ -46,7 +46,8 @@ function drawField() {
   g.clearRect(0, 0, w, h);
   const light = document.documentElement.dataset.theme === "light";
   const priv = document.body.classList.contains("private") || document.documentElement.hasAttribute("data-private");
-  const rgb = priv ? "183,155,255" : light ? "65,87,230" : "124,140,255";
+  const rgb = priv ? "183,155,255" : light ? "102,116,138" : "125,139,160";
+  const glow = priv ? "183,155,255" : light ? "184,101,15" : "240,180,76";
   const clockEl = document.getElementById("clock");
   const cr = clockEl ? clockEl.getBoundingClientRect() : null;
   const cy = cr && cr.height ? cr.top + cr.height / 2 : Math.min(h * 0.3, 260);
@@ -75,7 +76,7 @@ function drawField() {
       if (Math.hypot(x - end.x, y - end.y) < 22 || x < -50 || x > w + 50 || y < -50 || y > h + 50) break;
     }
   };
-  g.strokeStyle = `rgba(${rgb},${light ? 0.16 : 0.2})`;
+  g.strokeStyle = `rgba(${rgb},${light ? 0.34 : 0.32})`;
   g.lineWidth = 1.2;
   // Keep the clock clear: seeds start above/below it and spread outward.
   const clear = cr && cr.height ? cr.height / 2 + 28 : 70;
@@ -89,7 +90,7 @@ function drawField() {
   // Two faint pole glints.
   for (const p of poles) {
     const r = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, 64);
-    r.addColorStop(0, `rgba(${rgb},${light ? 0.12 : 0.17})`); r.addColorStop(1, `rgba(${rgb},0)`);
+    r.addColorStop(0, `rgba(${glow},${light ? 0.18 : 0.24})`); r.addColorStop(1, `rgba(${glow},0)`);
     g.fillStyle = r; g.beginPath(); g.arc(p.x, p.y, 64, 0, Math.PI * 2); g.fill();
   }
 }
