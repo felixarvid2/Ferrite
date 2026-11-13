@@ -45,4 +45,4 @@ Ferrite is a desktop web browser written in Rust on Chromium (CEF 156). Linux x8
   (felixarvid2/test) and will not see this release; install it manually once.
 - See `docs/STATUS.md` for everything verified and not verified.
 
-This is an early release (0.3.1: Ferrite's icon now shows in the dock/taskbar on Wayland, e.g. Ubuntu's default session). Ferrite now lives in https://github.com/felixarvid2/Ferrite.
+This is an early release (0.4.0: a new look in the style of the Kladd editor — Skymning/Gryning themes, IBM Plex fonts, amber accent; the Android APK is attached to this release too). Ferrite now lives in https://github.com/felixarvid2/Ferrite.
