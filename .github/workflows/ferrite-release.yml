@@ -61,7 +61,9 @@ jobs:
         run: scripts/setup-cef.sh
 
       - name: Test
-        run: CEF_PATH=$HOME/.local/share/cef cargo test --release --workspace
+        # Newer cargo puts test binaries under target/*/build/<pkg>/<hash>/out, where
+        # the $ORIGIN rpath can't find libcef.so: point the loader at CEF directly.
+        run: CEF_PATH=$HOME/.local/share/cef LD_LIBRARY_PATH=$HOME/.local/share/cef cargo test --release --workspace
 
       - name: Package (.deb and AppImage)
         run: |

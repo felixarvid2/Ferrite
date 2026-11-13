@@ -28,6 +28,11 @@ ui_files!(
     "settings.js",
     "about.js",
     "icon.svg",
+    "fonts/IBMPlexSans-Regular.ttf",
+    "fonts/IBMPlexSans-Medium.ttf",
+    "fonts/IBMPlexSans-SemiBold.ttf",
+    "fonts/IBMPlexMono-Regular.ttf",
+    "fonts/IBMPlexMono-Medium.ttf",
 );
 
 pub fn mime_for(name: &str) -> &'static str {
@@ -37,14 +42,17 @@ pub fn mime_for(name: &str) -> &'static str {
         "js" => "text/javascript",
         "svg" => "image/svg+xml",
         "png" => "image/png",
+        "ttf" => "font/ttf",
         "json" => "application/json",
         _ => "application/octet-stream",
     }
 }
 
-/// Look up a UI file by name (no directories allowed).
+/// Look up a UI file by name (no directories allowed, except `fonts/`).
 pub fn get(name: &str) -> Option<Vec<u8>> {
-    if name.is_empty() || name.contains('/') || name.contains("..") || name.contains('\\') {
+    // Flat namespace, except for the fonts under `fonts/`.
+    let flat = name.strip_prefix("fonts/").unwrap_or(name);
+    if flat.is_empty() || flat.contains('/') || name.contains("..") || name.contains('\\') {
         return None;
     }
     if let Ok(dir) = std::env::var("FERRITE_UI_DIR") {

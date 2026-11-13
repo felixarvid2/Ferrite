@@ -12,35 +12,32 @@
 <canvas id="field" aria-hidden="true"></canvas>
 <style>
   body { min-height: 100vh; background: var(--bg); }
-  :root[data-private] { --accent: #b48cff; --accent-fg: #1a0c33; --accent-soft: rgba(180,140,255,.16); --accent-ring: rgba(180,140,255,.55); --bg: #14111b; --bg2: #1d1928; --bg3: #2a2438; --border: #302a40; --border-strong: #463e5e; --card-border: rgba(255,255,255,.07); }
-  :root[data-private][data-theme="light"] { --accent: #6d3fd1; --accent-fg: #fff; --accent-soft: rgba(109,63,209,.1); --accent-ring: rgba(109,63,209,.5); --bg: #f4f0fb; --bg2: #fff; --bg3: #ebe5f7; --border: #e0d8f0; --border-strong: #cdc2e6; --card-border: rgba(0,0,0,.08); }
+  :root[data-private] { --accent: #b79bff; --accent-fg: #1a0c33; --accent-rgb: 183,155,255; --accent-soft: rgba(183,155,255,.16); --accent-ring: rgba(183,155,255,.6); --chrome: #130d1d; --bg: #191226; --bg2: #231a34; --bg3: #2e2342; --line: #2f2542; --border-strong: #3d3156; --switch-off: #3d3156; }
+  :root[data-private][data-theme="light"] { --accent: #6d3fd1; --accent-fg: #fff; --accent-rgb: 109,63,209; --accent-soft: rgba(109,63,209,.1); --accent-ring: rgba(109,63,209,.5); --chrome: #e8e2f3; --bg: #f5f1fb; --bg2: #fff; --bg3: #e3dbf1; --line: #d9d0ea; --border-strong: #cabfe0; }
   .nt { max-width: 720px; margin: 0 auto; padding: 14vh 24px 48px; text-align: center; }
   .hero { position: relative; isolation: isolate; }
   .hero::before { content: ""; position: absolute; left: 50%; top: 40%; width: 640px; height: 360px; transform: translate(-50%, -50%); z-index: -1; pointer-events: none;
-    background: radial-gradient(closest-side, rgba(120,140,255,.10), transparent); }
-  :root[data-theme="light"] .hero::before { background: radial-gradient(closest-side, rgba(65,87,230,.08), transparent); }
-  .clock { font-size: 76px; font-weight: 200; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+    background: radial-gradient(closest-side, rgba(var(--accent-rgb, 240,180,76),.07), transparent); }
+  .clock { font-size: 76px; font-weight: 400; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
   .greet { margin: 12px 0 34px; font-size: 16px; color: var(--date); }
   .badge { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 5px 12px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 12px; }
   .search { position: relative; max-width: 560px; margin: 0 auto; }
   .search svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--fg3); pointer-events: none; }
-  .search input { width: 100%; height: 48px; padding: 0 22px 0 48px; font-size: 15px; border-radius: 99px; background: var(--bg2); box-shadow: none; border: 1px solid rgba(255,255,255,.10); }
-  :root[data-theme="light"] .search input { border-color: rgba(0,0,0,.12); box-shadow: var(--shadow-1); }
-  .search input:hover { border-color: rgba(255,255,255,.18); }
-  :root[data-theme="light"] .search input:hover { border-color: rgba(0,0,0,.2); }
-  .search input:focus, .search input:focus-visible { outline: none; border-color: var(--accent-ring); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .search input { width: 100%; height: 46px; padding: 0 22px 0 48px; font-size: 14.5px; border-radius: 10px; background: var(--bg2); box-shadow: none; border: 1px solid var(--line); }
+  .search input:hover { border-color: var(--faint); }
+  .search input:focus, .search input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 44px auto 0; max-width: 608px; }
-  .tile { width: 112px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px; border-radius: 14px; text-decoration: none; color: var(--fg); background: var(--tile-bg);
+  .tile { width: 112px; height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px; border-radius: 12px; text-decoration: none; color: var(--fg); background: var(--tile-bg);
     transition: background var(--t), transform var(--t); }
   .tile:hover { background: var(--tile-bg-hover); transform: translateY(-1px); text-decoration: none; }
-  .tile .ic { width: 56px; height: 56px; border-radius: 12px; background: #eceef3; display: grid; place-items: center; overflow: hidden; flex: none; }
-  :root[data-theme="light"] .tile .ic { background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.08); }
+  .tile .ic { width: 56px; height: 56px; border-radius: 10px; background: #e9edf3; display: grid; place-items: center; overflow: hidden; flex: none; }
+  :root[data-theme="light"] .tile .ic { background: #f1f4f8; box-shadow: 0 0 0 1px var(--line); }
   .tile .ic img.fav { width: 28px; height: 28px; border-radius: 6px; }
-  .tile .ic .avatar { width: 56px; height: 56px; border-radius: 12px; font-size: 24px; }
+  .tile .ic .avatar { width: 56px; height: 56px; border-radius: 10px; font-size: 24px; }
   .tile span.name { font-size: 12.5px; line-height: 1.25; max-width: 100%; overflow: hidden; text-align: center; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; color: var(--tile-cap); }
   .tile { height: auto; min-height: 104px; justify-content: flex-start; padding-top: 10px; box-shadow: inset 0 0 0 1px var(--tile-line, transparent); }
   .tile span.name { min-height: 2.5em; }
-  .private { margin: 28px auto 0; max-width: 540px; padding: 18px 20px; text-align: left; color: var(--fg2); line-height: 1.6; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+  .private { margin: 28px auto 0; max-width: 540px; padding: 18px 20px; text-align: left; color: var(--fg2); line-height: 1.6; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius-lg); }
   .private h2 { margin: 0 0 6px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--fg); display: flex; gap: 8px; align-items: center; }
   .private h2 svg { color: var(--accent); }
   .nt { animation: rise .5s var(--ease) both; }

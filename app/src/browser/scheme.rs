@@ -247,7 +247,7 @@ wrap_resource_handler! {
                     // Internal pages run only our own scripts.
                     response.set_header_by_name(
                         Some(&cef_str("Content-Security-Policy")),
-                        Some(&cef_str("default-src 'self' ferrite://app; img-src * data:; style-src 'self' ferrite://app 'unsafe-inline'; frame-ancestors 'none'")),
+                        Some(&cef_str("default-src 'self' ferrite://app; img-src * data:; font-src 'self' ferrite://app; style-src 'self' ferrite://app 'unsafe-inline'; frame-ancestors 'none'")),
                         1,
                     );
                 }
