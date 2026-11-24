@@ -1,7 +1,0 @@
-# Build output, vendored data and binary assets
-target/
-android/app/build/
-android/rust/target/
-resources/adblock/
-ui/fonts/
-packaging/icons/
