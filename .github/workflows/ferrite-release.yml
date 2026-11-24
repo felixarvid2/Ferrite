@@ -101,6 +101,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.name }}
           body_path: ${{ steps.version.outputs.notes }}
+          # Only Ferrite itself is the repository's "Latest" release.
+          make_latest: ${{ env.EDITION == 'mcp' && 'false' || 'true' }}
           files: |
             dist/*_amd64.deb
             dist/*-x86_64.AppImage
