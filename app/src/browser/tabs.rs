@@ -64,6 +64,7 @@ fn empty_tab(id: TabId, win: WinId, url: &str, opts: &NewTab) -> Tab {
         } else {
             ferrite_mcp::policy::Control::None
         },
+        ai_taken_back: false,
         load_seq: 0,
     }
 }

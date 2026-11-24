@@ -9,6 +9,7 @@
 //! No async runtime and no CEF here: everything is plain `std` + `serde_json`
 //! so it can be unit tested and the bridge stays a small binary.
 
+pub mod edition;
 pub mod policy;
 pub mod rpc;
 pub mod tools;

@@ -35,9 +35,10 @@
 //! - `evaluate` runs page JavaScript in the main world and exists only
 //!   while `mcp_allow_evaluate` is on.
 
-use super::{cdp, tabs, window, with_state, State, Tab, TabId, WinId};
+use super::{cdp, tabs, window, with_state, State, Tab, TabId, Win, WinId};
 use crate::engine::{from_userfree, post_ui};
 use cef::*;
+use ferrite_mcp::edition::MCP_EDITION;
 use ferrite_mcp::policy::{self, Control, TabFacts};
 use ferrite_mcp::rpc::ToolOutput;
 use ferrite_mcp::tools::{self, Call};
@@ -172,11 +173,63 @@ pub fn grant(s: &mut State, tab: TabId) -> Result<(), &'static str> {
     }
     if let Some(t) = s.tabs.get_mut(&tab) {
         t.ai = Control::Shared;
+        t.ai_taken_back = false;
     }
     sync_tab(s, tab);
     s.mark_dirty(win);
     toast(s, win, "The AI can now control this tab");
     Ok(())
+}
+
+/// May the MCP edition hand this tab to the AI on its own?
+fn auto_grant_ok(s: &State, tab: TabId) -> bool {
+    if !MCP_EDITION || !s.settings.mcp_enabled {
+        return false;
+    }
+    let Some(t) = s.tabs.get(&tab) else {
+        return false;
+    };
+    t.ai == Control::None
+        && !t.ai_taken_back
+        && !t.closing
+        && s.windows
+            .get(&t.win)
+            .is_some_and(|w| !w.private && !w.ai && !w.closing)
+        && policy::page_allowed(&live_url(t))
+}
+
+/// MCP edition: every web tab of a normal window is AI-controlled without
+/// asking (a silent [`grant`]). Called when a tab's main frame changes
+/// address, so a tab that left for an internal page is picked up again once
+/// it is back on the web. No-op in the standard edition.
+pub fn auto_grant(s: &mut State, tab: TabId) {
+    if !auto_grant_ok(s, tab) {
+        return;
+    }
+    let Some(t) = s.tabs.get_mut(&tab) else {
+        return;
+    };
+    t.ai = Control::Shared;
+    let win = t.win;
+    sync_tab(s, tab);
+    s.mark_dirty(win);
+}
+
+/// [`auto_grant`] for every eligible tab (MCP switched on).
+fn auto_grant_all(s: &mut State) {
+    let ids: Vec<TabId> = s.tabs.keys().copied().collect();
+    for tab in ids {
+        auto_grant(s, tab);
+    }
+}
+
+/// The user takes control back (Stop button, tab menu): the MCP edition does
+/// not hand the tab over again by itself.
+pub fn revoke_by_user(s: &mut State, tab: TabId) {
+    if let Some(t) = s.tabs.get_mut(&tab) {
+        t.ai_taken_back = true;
+    }
+    revoke(s, tab);
 }
 
 /// Take control away from the AI (Stop button, menu, navigation away,
@@ -229,7 +282,7 @@ pub fn own_all_tabs(s: &mut State, win: WinId) {
 /// Tab menu item: hand over, or take back.
 pub fn toggle(s: &mut State, tab: TabId) {
     if s.ai_control(tab) != Control::None {
-        revoke(s, tab);
+        revoke_by_user(s, tab);
     } else if let Err(msg) = grant(s, tab) {
         if let Some(win) = s.tabs.get(&tab).map(|t| t.win) {
             toast(s, win, msg);
@@ -277,6 +330,7 @@ pub fn apply_settings(s: &mut State) {
                 LAST_ERROR.with(|e| *e.borrow_mut() = Some(err));
             }
         }
+        auto_grant_all(s);
     } else {
         stop_server();
         LAST_ERROR.with(|e| *e.borrow_mut() = None);
@@ -788,7 +842,9 @@ fn list_tabs(nonce: &str) -> Result<ToolOutput, String> {
                     continue;
                 }
                 let Some(t) = s.tabs.get(id) else { continue };
-                let who = if t.ai == Control::Own {
+                let who = if MCP_EDITION {
+                    "controlled"
+                } else if t.ai == Control::Own {
                     "opened by you"
                 } else {
                     "handed over by the user"
@@ -824,10 +880,39 @@ fn open_tab(nonce: &str, url: String) -> Result<ToolOutput, String> {
         if !s.settings.mcp_enabled {
             return Err("AI control is turned off in Ferrite's Settings".to_string());
         }
-        if s.tabs.values().filter(|t| t.ai == Control::Own).count() >= MAX_AI_TABS {
+        let counted = |t: &&Tab| t.ai == Control::Own || (MCP_EDITION && t.ai == Control::Shared);
+        if s.tabs.values().filter(counted).count() >= MAX_AI_TABS {
             return Err(format!(
                 "too many AI tabs open (limit {MAX_AI_TABS}); close some first"
             ));
+        }
+        if MCP_EDITION {
+            // No isolated AI window: a tab of the user's own (persistent)
+            // profile, so logins done for the AI persist.
+            let usable = |w: &&Win| !w.private && !w.ai && !w.closing;
+            let win = s
+                .last_window_focus
+                .and_then(|id| s.windows.get(&id))
+                .filter(usable)
+                .or_else(|| s.windows.values().rev().find(usable))
+                .map(|w| w.id);
+            let win = match win {
+                Some(w) => w,
+                None => {
+                    let mut init = window::WindowInit::normal(vec![]);
+                    init.tabs.clear();
+                    window::open_window(s, init).ok_or("could not open a window")?
+                }
+            };
+            let tab = tabs::new_tab(s, win, &url, tabs::NewTab::default())
+                .ok_or("could not open a tab")?;
+            if let Some(t) = s.tabs.get_mut(&tab) {
+                t.ai = Control::Shared;
+                t.ai_taken_back = false;
+            }
+            sync_tab(s, tab);
+            s.mark_dirty(win);
+            return Ok(tab);
         }
         let win = match s
             .windows
@@ -856,7 +941,11 @@ fn open_tab(nonce: &str, url: String) -> Result<ToolOutput, String> {
         nonce,
         tab,
         &info,
-        &format!("Opened tab {tab} in the AI window."),
+        &if MCP_EDITION {
+            format!("Opened tab {tab}.")
+        } else {
+            format!("Opened tab {tab} in the AI window.")
+        },
     ))
 }
 

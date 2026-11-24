@@ -36,7 +36,7 @@ pub fn socket_path(profile: &str) -> Option<PathBuf> {
     }
     let base = match std::env::var_os("FERRITE_DATA_DIR") {
         Some(d) if !d.is_empty() => PathBuf::from(d),
-        _ => dirs::data_dir()?.join("ferrite"),
+        _ => dirs::data_dir()?.join(crate::edition::DATA_DIR_NAME),
     };
     Some(socket_path_in(&base, profile))
 }

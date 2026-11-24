@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "ferrite-mcp"
 path = "src/main.rs"
 
+[features]
+# The MCP edition: Ferrite-mcp, driven only by AI clients (see edition.rs).
+mcp-edition = []
+
 [dependencies]
 serde_json.workspace = true
 url.workspace = true

@@ -196,13 +196,7 @@ pub fn open_window(s: &mut State, init: WindowInit) -> Option<WinId> {
             height: 0,
         }),
         init.maximized,
-        if init.private {
-            "Ferrite (Private)"
-        } else if init.ai {
-            "Ferrite (AI)"
-        } else {
-            "Ferrite"
-        },
+        window_name(init.private, init.ai),
         (!s.settings.system_titlebar)
             .then(|| theme::frame_color(&s.settings, init.private, init.ai)),
     );
@@ -296,13 +290,7 @@ pub fn update_title(s: &State, win: WinId) {
             }
         })
         .unwrap_or_default();
-    let suffix = if w.private {
-        "Ferrite (Private)"
-    } else if w.ai {
-        "Ferrite (AI)"
-    } else {
-        "Ferrite"
-    };
+    let suffix = window_name(w.private, w.ai);
     let full = if title.is_empty() {
         suffix.to_string()
     } else {
@@ -548,8 +536,19 @@ pub fn window_action(s: &mut State, win: WinId, action: &str) {
 /// Desktop identity of Ferrite windows: the Wayland app_id must equal the
 /// desktop file name (ferrite.desktop) and the X11 WM_CLASS its
 /// StartupWMClass, or docks show a generic icon instead of Ferrite's.
-const APP_ID: &str = "ferrite";
-const WM_CLASS_CLASS: &str = "Ferrite";
+const APP_ID: &str = ferrite_mcp::edition::APP_ID;
+const WM_CLASS_CLASS: &str = ferrite_mcp::edition::WM_CLASS;
+
+/// Native window title (also the title-bar suffix after the page title).
+fn window_name(private: bool, ai: bool) -> &'static str {
+    match (ferrite_mcp::edition::MCP_EDITION, private, ai) {
+        (false, true, _) => "Ferrite (Private)",
+        (false, _, true) => "Ferrite (AI)",
+        (true, true, _) => "Ferrite-mcp (Private)",
+        (true, _, true) => "Ferrite-mcp (AI)",
+        _ => ferrite_mcp::edition::APP_NAME,
+    }
+}
 
 /// Make CEF ask us for the window's Linux properties through a C callback
 /// that writes the strings straight into CEF's struct. (cef-rs's wrapper for
@@ -589,7 +588,7 @@ extern "C" fn linux_window_properties_c(
     1
 }
 
-/// Belt and braces for X11: set WM_CLASS "ferrite"/"Ferrite" on the native
+/// Belt and braces for X11: set WM_CLASS (APP_ID/WM_CLASS_CLASS) on the native
 /// window directly too (install_linux_window_properties covers X11 and
 /// Wayland through CEF; this only matters if CEF ever ignores it).
 #[cfg(target_os = "linux")]
@@ -603,7 +602,7 @@ fn set_wm_class(window: &Window) {
     let Ok(xlib) = x11_dl::xlib::Xlib::open() else {
         return;
     };
-    let (Ok(name), Ok(class)) = (CString::new("ferrite"), CString::new("Ferrite")) else {
+    let (Ok(name), Ok(class)) = (CString::new(APP_ID), CString::new(WM_CLASS_CLASS)) else {
         return;
     };
     let mut hint = x11_dl::xlib::XClassHint {

@@ -83,6 +83,24 @@ How it works and what it can do:
 - **Protocol**: current MCP revision 2026-07-28 (stateless, `server/discover`) and the handshake-based
   revisions 2025-11-25 down to 2024-11-05. Tools only.
 
+### Ferrite-mcp (the edition for AI clients)
+
+Ferrite-mcp is Ferrite built with the cargo feature `mcp-edition` (`EDITION=mcp scripts/package.sh`;
+released as `ferrite-mcp-v<version>`). It is meant to be used only by AI clients:
+
+- AI control and `evaluate` are on from the start (both can be turned off in Settings).
+- No hand-over: every web tab in a normal window is controllable at once. `open_tab` opens tabs in the
+  normal window with the normal profile (no isolated AI window), so logins done for the AI persist.
+  **Stop** (or the tab menu) takes a tab back until you hand it over again; a tab that left the web for an
+  internal page is controllable again once it is back on a web page.
+- The MCP server (`/usr/bin/ferrite-mcp-server` in the `ferrite-mcp` .deb, `Ferrite-mcp-*.AppImage
+  --mcp-server`) starts the browser by itself if it is not running (`FERRITE_MCP_BROWSER` overrides which
+  program it starts). `claude mcp add ferrite-mcp -- /usr/bin/ferrite-mcp-server`.
+- Own profile directory (`<data dir>/ferrite-mcp`), window class `Ferrite-mcp`, AppArmor profile and
+  update channel, so it installs and runs next to Ferrite. It is not registered as a web browser.
+- The limits above still hold: no `ferrite://` pages, private windows, downloads, permission prompts or
+  Proton Pass for the AI.
+
 ## Android
 
 [android/](android/README.md) is Ferrite for Android: a browser on Android System WebView with the

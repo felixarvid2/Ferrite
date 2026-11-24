@@ -9,6 +9,10 @@ description = "Ferrite: a desktop web browser written in Rust on top of Chromium
 name = "ferrite"
 path = "src/main.rs"
 
+[features]
+# Ferrite-mcp: the edition driven only by AI clients over MCP.
+mcp-edition = ["ferrite-core/mcp-edition", "ferrite-mcp/mcp-edition"]
+
 [dependencies]
 ferrite-core = { path = "../core" }
 ferrite-mcp = { path = "../mcp" }
