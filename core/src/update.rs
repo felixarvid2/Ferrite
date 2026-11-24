@@ -14,6 +14,15 @@ pub const RELEASES_URL: &str =
     "https://api.github.com/repos/felixarvid2/Ferrite/releases?per_page=20";
 /// Release tags look like `ferrite-v0.1.1` (`ferrite-mcp-v0.1.1` in the MCP edition); other tags in the repo are ignored.
 const TAG_PREFIX: &str = ferrite_mcp::edition::RELEASE_TAG_PREFIX;
+/// Architecture parts of the package names (scripts/package.sh).
+#[cfg(target_arch = "aarch64")]
+const DEB_ARCH: &str = "arm64";
+#[cfg(not(target_arch = "aarch64"))]
+const DEB_ARCH: &str = "amd64";
+#[cfg(target_arch = "aarch64")]
+const APPIMAGE_ARCH: &str = "aarch64";
+#[cfg(not(target_arch = "aarch64"))]
+const APPIMAGE_ARCH: &str = "x86_64";
 /// Responses larger than this are rejected.
 const MAX_BODY: u64 = 1024 * 1024;
 
@@ -231,11 +240,11 @@ pub fn newest_update(json: &[u8], current: &str) -> anyhow::Result<Option<Update
     Ok(Some(Update {
         // Package names follow the edition (scripts/package.sh).
         deb_url: find(format!(
-            "{}_{version}_amd64.deb",
+            "{}_{version}_{DEB_ARCH}.deb",
             ferrite_mcp::edition::APP_ID
         )),
         appimage_url: find(format!(
-            "{}-{version}-x86_64.AppImage",
+            "{}-{version}-{APPIMAGE_ARCH}.AppImage",
             ferrite_mcp::edition::APP_NAME
         )),
         version,
@@ -300,8 +309,8 @@ mod tests {
             r#"{{"tag_name":"{tag}","html_url":"https://github.com/felixarvid2/test/releases/tag/{tag}",
             "draft":{draft},"prerelease":{pre},"published_at":"2026-01-01T00:00:00Z","assets":[
             {{"name":"SHA256SUMS","browser_download_url":"https://github.com/x/SHA256SUMS"}},
-            {{"name":"ferrite_{v}_amd64.deb","browser_download_url":"https://github.com/x/ferrite_{v}_amd64.deb"}},
-            {{"name":"Ferrite-{v}-x86_64.AppImage","browser_download_url":"https://github.com/x/Ferrite-{v}-x86_64.AppImage"}}]}}"#
+            {{"name":"ferrite_{v}_{DEB_ARCH}.deb","browser_download_url":"https://github.com/x/ferrite_{v}_{DEB_ARCH}.deb"}},
+            {{"name":"Ferrite-{v}-{APPIMAGE_ARCH}.AppImage","browser_download_url":"https://github.com/x/Ferrite-{v}-{APPIMAGE_ARCH}.AppImage"}}]}}"#
         )
     }
     fn list(items: &[String]) -> Vec<u8> {
@@ -344,11 +353,11 @@ mod tests {
         );
         assert_eq!(
             u.deb_url.as_deref(),
-            Some("https://github.com/x/ferrite_0.10.0_amd64.deb")
+            Some(format!("https://github.com/x/ferrite_0.10.0_{DEB_ARCH}.deb").as_str())
         );
         assert_eq!(
             u.appimage_url.as_deref(),
-            Some("https://github.com/x/Ferrite-0.10.0-x86_64.AppImage")
+            Some(format!("https://github.com/x/Ferrite-0.10.0-{APPIMAGE_ARCH}.AppImage").as_str())
         );
     }
 
@@ -380,9 +389,11 @@ mod tests {
 
     #[test]
     fn missing_assets_and_unsafe_links() {
-        let json = br#"[{"tag_name":"ferrite-v0.5.0","html_url":"https://example.org/r","assets":[
-            {"name":"ferrite_0.5.0_amd64.deb","browser_download_url":"javascript:alert(1)"}]}]"#;
-        let u = newest_update(json, "0.1.0").unwrap().unwrap();
+        let json = format!(
+            r#"[{{"tag_name":"ferrite-v0.5.0","html_url":"https://example.org/r","assets":[
+            {{"name":"ferrite_0.5.0_{DEB_ARCH}.deb","browser_download_url":"javascript:alert(1)"}}]}}]"#
+        );
+        let u = newest_update(json.as_bytes(), "0.1.0").unwrap().unwrap();
         assert_eq!(u.deb_url, None);
         assert_eq!(u.appimage_url, None);
         let json =
@@ -402,11 +413,16 @@ mod tests {
             u.url,
             "https://github.com/felixarvid2/test/releases/tag/ferrite-v0.1.1"
         );
-        assert!(u.deb_url.unwrap().ends_with("/ferrite_0.1.1_amd64.deb"));
-        assert!(u
-            .appimage_url
-            .unwrap()
-            .ends_with("/Ferrite-0.1.1-x86_64.AppImage"));
+        // The recorded release only has x86_64 packages.
+        if DEB_ARCH == "amd64" {
+            assert!(u.deb_url.unwrap().ends_with("/ferrite_0.1.1_amd64.deb"));
+            assert!(u
+                .appimage_url
+                .unwrap()
+                .ends_with("/Ferrite-0.1.1-x86_64.AppImage"));
+        } else {
+            assert_eq!((u.deb_url, u.appimage_url), (None, None));
+        }
         assert_eq!(newest_update(REAL, "0.1.1").unwrap(), None);
     }
 

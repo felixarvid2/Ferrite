@@ -7,6 +7,10 @@ name: ferrite-release
 #
 # edition=mcp builds Ferrite-mcp (the edition for AI clients, see
 # scripts/package.sh) and publishes it as ferrite-mcp-v<version>.
+#
+# arch=arm64 builds on GitHub's arm64 runner and adds the arm64 .deb to
+# the same release (checksums in SHA256SUMS-arm64). Run amd64 first: it
+# creates the release.
 
 on:
   push:
@@ -24,6 +28,11 @@ on:
         type: choice
         options: [standard, mcp]
         default: standard
+      arch:
+        description: "amd64 or arm64 (arm64 adds packages to the existing release)"
+        type: choice
+        options: [amd64, arm64]
+        default: amd64
 
 permissions:
   contents: write
@@ -35,7 +44,7 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -90,8 +99,12 @@ jobs:
       - name: Package (.deb and AppImage)
         run: |
           export CEF_PATH=$HOME/.local/share/cef
-          scripts/package.sh
-          cd dist && sha256sum *_amd64.deb *-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS
+          if [ "$(dpkg --print-architecture)" = arm64 ]; then
+            scripts/package.sh --deb-only && SUMS=SHA256SUMS-arm64
+          else
+            scripts/package.sh && SUMS=SHA256SUMS
+          fi
+          cd dist && sha256sum *.deb $(ls *.AppImage 2>/dev/null) > "$SUMS" && cat "$SUMS"
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish
@@ -104,16 +117,16 @@ jobs:
           # Only Ferrite itself is the repository's "Latest" release.
           make_latest: ${{ env.EDITION == 'mcp' && 'false' || 'true' }}
           files: |
-            dist/*_amd64.deb
-            dist/*-x86_64.AppImage
-            dist/SHA256SUMS
+            dist/*.deb
+            dist/*.AppImage
+            dist/SHA256SUMS*
 
       - name: Keep packages (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
-          name: ferrite-packages-${{ env.EDITION }}
+          name: ferrite-packages-${{ env.EDITION }}-${{ inputs.arch || 'amd64' }}
           path: |
-            dist/*_amd64.deb
-            dist/*-x86_64.AppImage
-            dist/SHA256SUMS
+            dist/*.deb
+            dist/*.AppImage
+            dist/SHA256SUMS*
