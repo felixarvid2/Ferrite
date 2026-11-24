@@ -108,6 +108,7 @@ pub fn window_snapshot(s: &State, win: WinId) -> Value {
         "win": win,
         "private": w.private,
         "ai_window": w.ai,
+        "edition": if ferrite_mcp::edition::MCP_EDITION { "mcp" } else { "standard" },
         "theme": s.settings.theme,
         "tabs": tabs,
         "active": w.active,
@@ -320,7 +321,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         }
         "ai_stop" => {
             let tab = tab_in_window(s, win, arg_i64(&args, "tab")? as u32)?;
-            super::mcp::revoke(s, tab);
+            super::mcp::revoke_by_user(s, tab);
             Value::Null
         }
         "mcp_status" => super::mcp::status(s),
@@ -550,6 +551,7 @@ pub fn handle(s: &mut State, browser_id: i32, command: &str, args: Value) -> Res
         "update_check" => super::updates::check_now(s),
         "about" => json!({
             "ferrite": env!("CARGO_PKG_VERSION"),
+            "edition": if ferrite_mcp::edition::MCP_EDITION { "mcp" } else { "standard" },
             "cef": runtime_version(&[0, 1, 2]),
             "chromium": runtime_version(&[4, 5, 6, 7]),
             "profile_dir": s.paths.root,

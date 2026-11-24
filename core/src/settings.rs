@@ -92,8 +92,9 @@ impl Default for Settings {
             proton_pass_vault: String::new(),
             proton_pass_never_save: Vec::new(),
             check_for_updates: true,
-            mcp_enabled: false,
-            mcp_allow_evaluate: false,
+            // The MCP edition is for AI clients: control is on from the start.
+            mcp_enabled: ferrite_mcp::edition::MCP_EDITION,
+            mcp_allow_evaluate: ferrite_mcp::edition::MCP_EDITION,
         }
     }
 }
@@ -170,7 +171,10 @@ mod tests {
         assert!(s.proton_pass_offer_save);
         assert!(s.check_for_updates);
         // AI control is opt-in, and running page scripts is a second opt-in.
+        #[cfg(not(feature = "mcp-edition"))]
         assert!(!s.mcp_enabled && !s.mcp_allow_evaluate);
+        #[cfg(feature = "mcp-edition")]
+        assert!(s.mcp_enabled && s.mcp_allow_evaluate);
         assert!(s.proton_pass_vault.is_empty() && s.proton_pass_never_save.is_empty());
     }
 

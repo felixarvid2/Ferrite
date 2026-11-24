@@ -85,6 +85,8 @@ pub struct Tab {
     pub secure: Option<bool>,
     /// Under AI control (MCP)? See `mcp.rs`.
     pub ai: ferrite_mcp::policy::Control,
+    /// The user took control back (MCP edition: no automatic re-grant).
+    pub ai_taken_back: bool,
     /// Counts loads started in this tab (the MCP tools wait on it).
     pub load_seq: u64,
 }

@@ -279,7 +279,8 @@ window.ferrite = {
     const aiTab = s.tabs.find(t => t.id === s.active && t.ai);
     $("aibar").hidden = !aiTab;
     $("aibar").dataset.tab = aiTab ? aiTab.id : "";
-    $("ai-text").textContent = aiTab && aiTab.ai === "own" ? "AI is controlling this tab (opened by the AI in this isolated window)" : "AI is controlling this tab";
+    $("wordmark").firstChild.nodeValue = s.edition === "mcp" ? "Ferrite-mcp" : "Ferrite";
+    $("ai-text").textContent = aiTab && aiTab.ai === "own" ? "AI is controlling this tab (opened by the AI in this isolated window)" : s.edition === "mcp" ? "Ferrite-mcp: AI-controlled tab" : "AI is controlling this tab";
     $("winctl").hidden = !s.frameless;
     if (s.frameless && !SIDE) document.documentElement.dataset.frameless = ""; else delete document.documentElement.dataset.frameless;
     if (s.vertical_tabs && !SIDE) document.documentElement.dataset.vtabs = ""; else delete document.documentElement.dataset.vtabs;

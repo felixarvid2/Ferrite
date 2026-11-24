@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 /// Releases of the Ferrite repository, newest first (GitHub's order).
 pub const RELEASES_URL: &str =
     "https://api.github.com/repos/felixarvid2/Ferrite/releases?per_page=20";
-/// Release tags look like `ferrite-v0.1.1`; other tags in the repo are ignored.
-const TAG_PREFIX: &str = "ferrite-v";
+/// Release tags look like `ferrite-v0.1.1` (`ferrite-mcp-v0.1.1` in the MCP edition); other tags in the repo are ignored.
+const TAG_PREFIX: &str = ferrite_mcp::edition::RELEASE_TAG_PREFIX;
 /// Responses larger than this are rejected.
 const MAX_BODY: u64 = 1024 * 1024;
 
@@ -229,8 +229,15 @@ pub fn newest_update(json: &[u8], current: &str) -> anyhow::Result<Option<Update
             .and_then(|a| web_url(&a.browser_download_url))
     };
     Ok(Some(Update {
-        deb_url: find(format!("ferrite_{version}_amd64.deb")),
-        appimage_url: find(format!("Ferrite-{version}-x86_64.AppImage")),
+        // Package names follow the edition (scripts/package.sh).
+        deb_url: find(format!(
+            "{}_{version}_amd64.deb",
+            ferrite_mcp::edition::APP_ID
+        )),
+        appimage_url: find(format!(
+            "{}-{version}-x86_64.AppImage",
+            ferrite_mcp::edition::APP_NAME
+        )),
         version,
         url,
     }))
@@ -282,7 +289,8 @@ pub fn check(url: &str, current: &str) -> anyhow::Result<Option<Update>> {
     newest_update(&fetch(url, current)?, current)
 }
 
-#[cfg(test)]
+// These fixtures are standard-edition `ferrite-v*` releases.
+#[cfg(all(test, not(feature = "mcp-edition")))]
 mod tests {
     use super::*;
 
@@ -462,5 +470,32 @@ mod tests {
             UpdateState::default()
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+#[cfg(test)]
+mod edition_tests {
+    use super::*;
+
+    fn one(tag: &str) -> Vec<u8> {
+        format!(
+            r#"[{{"tag_name":"{tag}","html_url":"https://example.org/r","draft":false,"prerelease":false,"assets":[]}}]"#
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn only_own_edition_tags_count() {
+        let own = format!("{TAG_PREFIX}0.4.1");
+        assert_eq!(
+            newest_update(&one(&own), "0.4.0").unwrap().unwrap().version,
+            "0.4.1"
+        );
+        let other = if ferrite_mcp::edition::MCP_EDITION {
+            "ferrite-v0.4.1"
+        } else {
+            "ferrite-mcp-v0.4.1"
+        };
+        assert_eq!(newest_update(&one(other), "0.4.0").unwrap(), None);
     }
 }

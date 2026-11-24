@@ -253,6 +253,7 @@ wrap_display_handler! {
                     }
                     t.url = url;
                 }
+                super::mcp::auto_grant(s, tab);
                 tab_changed(s, tab);
                 s.schedule_session_save();
             });

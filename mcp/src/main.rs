@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+#[cfg(not(feature = "mcp-edition"))]
 const HELP: &str = "\
 Usage: ferrite-mcp [--profile=NAME] [--socket=PATH]
 
@@ -25,26 +26,118 @@ MCP server on stdin/stdout for controlling the Ferrite browser. Enable
 <data dir>/profiles/NAME/mcp.sock (NAME defaults to \"default\").
 Environment: FERRITE_DATA_DIR, FERRITE_MCP_SOCKET.";
 
+#[cfg(feature = "mcp-edition")]
+const HELP: &str = "\
+Usage: ferrite-mcp [--profile=NAME] [--socket=PATH]
+
+MCP server on stdin/stdout for controlling the Ferrite-mcp browser. If
+Ferrite-mcp is not running, the first tool call starts it automatically (a
+graphical session is needed; see FERRITE_MCP_BROWSER). The socket defaults
+to <data dir>/profiles/NAME/mcp.sock (NAME defaults to \"default\").
+Environment: FERRITE_DATA_DIR, FERRITE_MCP_SOCKET, FERRITE_MCP_BROWSER
+(path of the browser to start instead of the `ferrite` next to this program).";
+
 /// A tool call may legitimately take this long (wait_for is capped at 30 s).
 const CALL_TIMEOUT: Duration = Duration::from_secs(90);
 
 struct SocketBackend {
     path: PathBuf,
     next: AtomicU64,
+    /// MCP edition: the browser is started at most once per bridge process.
+    #[cfg(feature = "mcp-edition")]
+    autostart: std::sync::Mutex<bool>,
+}
+
+/// How long to wait for a freshly started browser to open its socket.
+#[cfg(feature = "mcp-edition")]
+const START_WAIT: Duration = Duration::from_secs(30);
+
+#[cfg(feature = "mcp-edition")]
+impl SocketBackend {
+    /// Connect; if nothing listens yet, start the browser (once) and retry.
+    fn connect(&self) -> Result<UnixStream, String> {
+        let err = match UnixStream::connect(&self.path) {
+            Ok(s) => return Ok(s),
+            Err(e) => e,
+        };
+        if !matches!(
+            err.kind(),
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+        ) {
+            return Err(format!("Cannot reach Ferrite-mcp: {err}"));
+        }
+        // Held while waiting so concurrent calls do not start it twice.
+        let mut tried = self.autostart.lock().unwrap_or_else(|e| e.into_inner());
+        if *tried {
+            // Started earlier (maybe by a concurrent call): one more look.
+            return UnixStream::connect(&self.path).map_err(|_| Self::NOT_REACHABLE.to_string());
+        }
+        *tried = true;
+        spawn_browser()?;
+        let deadline = std::time::Instant::now() + START_WAIT;
+        loop {
+            if let Ok(s) = UnixStream::connect(&self.path) {
+                return Ok(s);
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "Started Ferrite-mcp but it did not become ready within {} s. It needs a \
+                     graphical session (DISPLAY or WAYLAND_DISPLAY) and \"AI control (MCP)\" \
+                     turned on in its Settings.",
+                    START_WAIT.as_secs()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
+
+    const NOT_REACHABLE: &'static str = "Cannot reach Ferrite-mcp. Start it and turn on \
+         \"AI control (MCP)\" in its Settings, then try again.";
+}
+
+/// Start the browser detached from this process (own process group, no stdio).
+#[cfg(feature = "mcp-edition")]
+fn spawn_browser() -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+    let exe = match std::env::var_os("FERRITE_MCP_BROWSER").filter(|p| !p.is_empty()) {
+        Some(p) => PathBuf::from(p),
+        None => std::env::current_exe()
+            .map_err(|e| format!("Cannot start Ferrite-mcp: {e}"))?
+            .parent()
+            .map(|d| d.join("ferrite"))
+            .ok_or("Cannot start Ferrite-mcp: unknown program directory")?,
+    };
+    Command::new(&exe)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map(drop)
+        .map_err(|e| {
+            format!(
+                "Cannot start Ferrite-mcp ({}): {e}. It needs a graphical session (DISPLAY or \
+                 WAYLAND_DISPLAY).",
+                exe.display()
+            )
+        })
 }
 
 impl Backend for SocketBackend {
     fn call(&self, call: Call) -> ToolOutput {
         let (tool, args) = to_wire(&call);
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        let mut stream = match UnixStream::connect(&self.path) {
+        #[cfg(feature = "mcp-edition")]
+        let stream = self.connect();
+        #[cfg(not(feature = "mcp-edition"))]
+        let stream = UnixStream::connect(&self.path).map_err(|_| {
+            "Cannot reach Ferrite. Start Ferrite and turn on \"AI control (MCP)\" in its Settings, \
+             then try again."
+        });
+        let mut stream = match stream {
             Ok(s) => s,
-            Err(_) => {
-                return ToolOutput::error(
-                    "Cannot reach Ferrite. Start Ferrite and turn on \"AI control (MCP)\" in its Settings, \
-                     then try again.",
-                )
-            }
+            Err(msg) => return ToolOutput::error(msg),
         };
         let _ = stream.set_read_timeout(Some(CALL_TIMEOUT));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
@@ -150,6 +243,8 @@ fn main() {
     let server = Server::new(SocketBackend {
         path,
         next: AtomicU64::new(1),
+        #[cfg(feature = "mcp-edition")]
+        autostart: std::sync::Mutex::new(false),
     });
     let stdin = std::io::stdin();
     let mut input = stdin.lock();

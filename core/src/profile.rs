@@ -19,13 +19,13 @@ pub struct ProfilePaths {
 }
 
 impl ProfilePaths {
-    /// Base is `FERRITE_DATA_DIR` if set, else the platform data dir joined with `ferrite`.
+    /// Base is `FERRITE_DATA_DIR` if set, else the platform data dir joined with `ferrite` (`ferrite-mcp` in the MCP edition).
     pub fn for_profile(name: &str) -> anyhow::Result<ProfilePaths> {
         let base = match std::env::var_os("FERRITE_DATA_DIR") {
             Some(d) if !d.is_empty() => PathBuf::from(d),
             _ => dirs::data_dir()
                 .context("no platform data directory")?
-                .join("ferrite"),
+                .join(ferrite_mcp::edition::DATA_DIR_NAME),
         };
         Self::for_profile_in(&base, name)
     }

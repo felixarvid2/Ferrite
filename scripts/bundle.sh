@@ -3,10 +3,17 @@
 # executable, libcef.so and Chromium's resources. Copy that directory
 # anywhere and run ./ferrite. ferrite-mcp (the MCP bridge for AI clients) is
 # shipped next to it.
+#
+# EDITION=mcp builds Ferrite-mcp instead (the AI-only edition, cargo feature
+# mcp-edition: MCP on from the start, its own profile and app id).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export CEF_PATH="${CEF_PATH:-$HOME/.local/share/cef}"
-cargo build --release
+case "${EDITION:-standard}" in
+  standard) cargo build --release ;;
+  mcp) cargo build --release -p ferrite -p ferrite-mcp --features ferrite/mcp-edition,ferrite-mcp/mcp-edition ;;
+  *) echo "unknown EDITION=${EDITION} (standard or mcp)" >&2; exit 2 ;;
+esac
 OUT=dist/ferrite
 rm -rf "$OUT" && mkdir -p "$OUT"
 cp target/release/ferrite target/release/ferrite-mcp "$OUT/"

@@ -4,23 +4,34 @@ name: ferrite-release
 # tagged ferrite-v<version> (version from Cargo.toml). Run it by
 # pushing such a tag, or manually with publish=true (creates the tag on the
 # commit it runs on). A manual run with publish=false only uploads artifacts.
+#
+# edition=mcp builds Ferrite-mcp (the edition for AI clients, see
+# scripts/package.sh) and publishes it as ferrite-mcp-v<version>.
 
 on:
   push:
     tags:
       - "ferrite-v*"
+      - "ferrite-mcp-v*"
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publish a GitHub release (tag ferrite-v<version>)"
+        description: "Publish a GitHub release (tag ferrite-v<version>, or ferrite-mcp-v<version> for edition=mcp)"
         type: boolean
         default: false
+      edition:
+        description: "standard (Ferrite) or mcp (Ferrite-mcp)"
+        type: choice
+        options: [standard, mcp]
+        default: standard
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  # A pushed ferrite-mcp-v* tag means the mcp edition.
+  EDITION: ${{ inputs.edition || (startsWith(github.ref_name, 'ferrite-mcp-v') && 'mcp') || 'standard' }}
 
 jobs:
   release:
@@ -52,8 +63,13 @@ jobs:
         id: version
         run: |
           VERSION="$(awk -F'"' '/^\[workspace.package\]/ {p=1} p && /^version/ {print $2; exit}' Cargo.toml)"
-          echo "tag=ferrite-v${VERSION}" >> "$GITHUB_OUTPUT"
-          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "ferrite-v${VERSION}" ]; then
+          if [ "$EDITION" = mcp ]; then
+            TAG="ferrite-mcp-v${VERSION}"; NAME="Ferrite-mcp ${VERSION}"; NOTES=packaging/RELEASE_NOTES-mcp.md
+          else
+            TAG="ferrite-v${VERSION}"; NAME="Ferrite ferrite-v${VERSION}"; NOTES=packaging/RELEASE_NOTES.md
+          fi
+          { echo "tag=$TAG"; echo "name=$NAME"; echo "notes=$NOTES"; } >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "$TAG" ]; then
             echo "tag ${GITHUB_REF_NAME} does not match version ${VERSION}"; exit 1
           fi
 
@@ -63,14 +79,19 @@ jobs:
       - name: Test
         # Newer cargo puts test binaries under target/*/build/<pkg>/<hash>/out, where
         # the $ORIGIN rpath can't find libcef.so: point the loader at CEF directly.
-        run: CEF_PATH=$HOME/.local/share/cef LD_LIBRARY_PATH=$HOME/.local/share/cef cargo test --release --workspace
+        run: |
+          export CEF_PATH=$HOME/.local/share/cef LD_LIBRARY_PATH=$HOME/.local/share/cef
+          if [ "$EDITION" = mcp ]; then
+            cargo test --release --workspace --features ferrite/mcp-edition,ferrite-mcp/mcp-edition
+          else
+            cargo test --release --workspace
+          fi
 
       - name: Package (.deb and AppImage)
         run: |
           export CEF_PATH=$HOME/.local/share/cef
-          cargo build --release
           scripts/package.sh
-          cd dist && sha256sum ferrite_*_amd64.deb Ferrite-*-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS
+          cd dist && sha256sum *_amd64.deb *-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/') || inputs.publish
@@ -78,19 +99,19 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Ferrite ${{ steps.version.outputs.tag }}
-          body_path: packaging/RELEASE_NOTES.md
+          name: ${{ steps.version.outputs.name }}
+          body_path: ${{ steps.version.outputs.notes }}
           files: |
-            dist/ferrite_*_amd64.deb
-            dist/Ferrite-*-x86_64.AppImage
+            dist/*_amd64.deb
+            dist/*-x86_64.AppImage
             dist/SHA256SUMS
 
       - name: Keep packages (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.publish }}
         uses: actions/upload-artifact@v4
         with:
-          name: ferrite-packages
+          name: ferrite-packages-${{ env.EDITION }}
           path: |
-            dist/ferrite_*_amd64.deb
-            dist/Ferrite-*-x86_64.AppImage
+            dist/*_amd64.deb
+            dist/*-x86_64.AppImage
             dist/SHA256SUMS
