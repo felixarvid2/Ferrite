@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Ferrite-mcp
+GenericName=Web Browser for AI clients
+Comment=Ferrite controlled by AI clients over MCP
+Exec=ferrite-mcp-browser
+Icon=ferrite-mcp
+Terminal=false
+Categories=Network;
+StartupNotify=true
+StartupWMClass=Ferrite-mcp
+Keywords=browser;web;ai;mcp;

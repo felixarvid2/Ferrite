@@ -5,6 +5,14 @@
 #
 #   scripts/package.sh [--deb-only|--appimage-only]
 #
+# EDITION=mcp packages Ferrite-mcp, the edition for AI clients only:
+#   dist/ferrite-mcp_<version>_amd64.deb        (installs to /opt/ferrite-mcp;
+#        /usr/bin/ferrite-mcp-server is the MCP server for AI clients and starts
+#        the browser by itself, /usr/bin/ferrite-mcp-browser opens it by hand)
+#   dist/Ferrite-mcp-<version>-x86_64.AppImage  (`--mcp-server` runs the MCP server)
+# It installs next to Ferrite (own profile, app id and AppArmor profile) and
+# is not registered as a web browser.
+#
 # Uses CEF_PATH like the other scripts (set it to a codec build to package
 # one; see docs/CODECS.md for the licensing of redistributing that).
 set -euo pipefail
@@ -19,7 +27,15 @@ case "${1:-}" in
 esac
 
 VERSION="$(awk -F'"' '/^\[workspace.package\]/ {p=1} p && /^version/ {print $2; exit}' Cargo.toml)"
-echo "Packaging Ferrite $VERSION"
+EDITION="${EDITION:-standard}"
+case "$EDITION" in
+  standard) PKG=ferrite; NAME=Ferrite; DESKTOP=packaging/ferrite.desktop ;;
+  mcp) PKG=ferrite-mcp; NAME=Ferrite-mcp; DESKTOP=packaging/ferrite-mcp.desktop ;;
+  *) echo "unknown EDITION=$EDITION (standard or mcp)" >&2; exit 2 ;;
+esac
+export EDITION
+PREFIX="/opt/$PKG"
+echo "Packaging $NAME $VERSION"
 
 scripts/bundle.sh
 BUNDLE="$ROOT/dist/ferrite"
@@ -49,26 +65,46 @@ fi
 
 install_icons() { # <prefix>
   for size in 16 32 48 64 128 256 512; do
-    install -Dm644 "$ICONS/ferrite-$size.png" "$1/usr/share/icons/hicolor/${size}x${size}/apps/ferrite.png"
+    install -Dm644 "$ICONS/ferrite-$size.png" "$1/usr/share/icons/hicolor/${size}x${size}/apps/$PKG.png"
   done
-  install -Dm644 ui/icon.svg "$1/usr/share/icons/hicolor/scalable/apps/ferrite.svg"
+  install -Dm644 ui/icon.svg "$1/usr/share/icons/hicolor/scalable/apps/$PKG.svg"
 }
 
 # ---------------------------------------------------------------- .deb
 if [ "$WANT_DEB" = 1 ]; then
   DEB="$WORK/deb"
   mkdir -p "$DEB/opt" "$DEB/DEBIAN"
-  cp -a "$BUNDLE" "$DEB/opt/ferrite"
-  install -Dm755 packaging/ferrite-launcher.sh "$DEB/usr/bin/ferrite"
-  # MCP bridge for AI clients (see README): /usr/bin/ferrite-mcp
-  ln -s /opt/ferrite/ferrite-mcp "$DEB/usr/bin/ferrite-mcp"
-  install -Dm644 packaging/ferrite.desktop "$DEB/usr/share/applications/ferrite.desktop"
-  install -Dm644 packaging/apparmor-ferrite "$DEB/etc/apparmor.d/ferrite"
-  install -Dm644 LICENSE "$DEB/usr/share/doc/ferrite/copyright"
+  cp -a "$BUNDLE" "$DEB$PREFIX"
+  mkdir -p "$DEB/usr/bin"
+  if [ "$EDITION" = mcp ]; then
+    # The MCP server is what AI clients run; it starts the browser itself.
+    ln -s "$PREFIX/ferrite-mcp" "$DEB/usr/bin/ferrite-mcp-server"
+    printf '#!/bin/sh\n# /usr/bin/ferrite-mcp-browser: open Ferrite-mcp by hand.\nexec %s/ferrite "$@"\n' "$PREFIX" > "$WORK/launcher"
+    install -Dm755 "$WORK/launcher" "$DEB/usr/bin/ferrite-mcp-browser"
+    sed "s#/opt/ferrite/ferrite#$PREFIX/ferrite#; s#^profile ferrite #profile $PKG #; s#<local/ferrite>#<local/$PKG>#" \
+      packaging/apparmor-ferrite > "$WORK/apparmor"
+    install -Dm644 "$WORK/apparmor" "$DEB/etc/apparmor.d/$PKG"
+    DESCRIPTION="Ferrite-mcp: a web browser for AI clients (MCP)
+ Ferrite (Rust on Chromium/CEF) built for AI clients: MCP control is on
+ from the start and every web tab can be driven without handing it over.
+ Point your MCP client at /usr/bin/ferrite-mcp-server."
+    PROVIDES=""
+  else
+    install -Dm755 packaging/ferrite-launcher.sh "$DEB/usr/bin/ferrite"
+    # MCP bridge for AI clients (see README): /usr/bin/ferrite-mcp
+    ln -s /opt/ferrite/ferrite-mcp "$DEB/usr/bin/ferrite-mcp"
+    install -Dm644 packaging/apparmor-ferrite "$DEB/etc/apparmor.d/ferrite"
+    DESCRIPTION="Ferrite web browser
+ A desktop web browser written in Rust on top of Chromium (CEF)."
+    PROVIDES="Provides: www-browser
+"
+  fi
+  install -Dm644 "$DESKTOP" "$DEB/usr/share/applications/$PKG.desktop"
+  install -Dm644 LICENSE "$DEB/usr/share/doc/$PKG/copyright"
   install_icons "$DEB"
   SIZE_KB="$(du -sk "$DEB" | cut -f1)"
   cat > "$DEB/DEBIAN/control" <<EOF
-Package: ferrite
+Package: $PKG
 Version: $VERSION
 Section: web
 Priority: optional
@@ -77,13 +113,10 @@ Maintainer: Ferrite <noreply@localhost>
 Installed-Size: $SIZE_KB
 Depends: libasound2t64 | libasound2, libatk-bridge2.0-0t64 | libatk-bridge2.0-0, libatk1.0-0t64 | libatk1.0-0, libatspi2.0-0t64 | libatspi2.0-0, libc6 (>= 2.31), libcairo2, libcups2t64 | libcups2, libdbus-1-3, libdrm2, libexpat1, libgbm1, libglib2.0-0t64 | libglib2.0-0, libgtk-3-0t64 | libgtk-3-0, libnspr4, libnss3, libpango-1.0-0, libudev1, libx11-6, libxcb1, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxkbcommon0, libxrandr2, ca-certificates, xdg-utils
 Recommends: fonts-liberation
-Provides: www-browser
-Description: Ferrite web browser
- A desktop web browser written in Rust on top of Chromium (CEF).
+${PROVIDES}Description: $DESCRIPTION
 EOF
-  cat > "$DEB/DEBIAN/conffiles" <<'EOF'
-/etc/apparmor.d/ferrite
-EOF
+  echo "/etc/apparmor.d/$PKG" > "$DEB/DEBIAN/conffiles"
+  # The maintainer scripts below are Ferrite's; sed adapts them for the edition.
   cat > "$DEB/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
@@ -118,19 +151,26 @@ fi
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q /usr/share/applications || true
 exit 0
 EOF
+  if [ "$EDITION" = mcp ]; then
+    # Not a default-browser candidate: no x-www-browser alternative.
+    sed -i '/update-alternatives/,/^fi$/d' "$DEB/DEBIAN/postinst" "$DEB/DEBIAN/prerm"
+    sed -i "s#/opt/ferrite/#$PREFIX/#g; s#/etc/apparmor.d/ferrite#/etc/apparmor.d/$PKG#g" \
+      "$DEB/DEBIAN/postinst" "$DEB/DEBIAN/postrm"
+  fi
   chmod 755 "$DEB/DEBIAN/postinst" "$DEB/DEBIAN/prerm" "$DEB/DEBIAN/postrm"
-  dpkg-deb --root-owner-group -Zxz --build "$DEB" "dist/ferrite_${VERSION}_amd64.deb" >/dev/null
-  echo "Built dist/ferrite_${VERSION}_amd64.deb ($(du -h "dist/ferrite_${VERSION}_amd64.deb" | cut -f1))"
+  DEBFILE="dist/${PKG}_${VERSION}_amd64.deb"
+  dpkg-deb --root-owner-group -Zxz --build "$DEB" "$DEBFILE" >/dev/null
+  echo "Built $DEBFILE ($(du -h "$DEBFILE" | cut -f1))"
 fi
 
 # ---------------------------------------------------------------- AppImage
 if [ "$WANT_APPIMAGE" = 1 ]; then
-  APPDIR="$WORK/Ferrite.AppDir"
+  APPDIR="$WORK/$NAME.AppDir"
   mkdir -p "$APPDIR/opt"
   cp -a "$BUNDLE" "$APPDIR/opt/ferrite"
   install_icons "$APPDIR"
-  cp packaging/ferrite.desktop "$APPDIR/ferrite.desktop"
-  cp "$ICONS/ferrite-256.png" "$APPDIR/ferrite.png"
+  cp "$DESKTOP" "$APPDIR/$PKG.desktop"
+  cp "$ICONS/ferrite-256.png" "$APPDIR/$PKG.png"
   cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 # AppImages cannot carry the setuid sandbox helper, so Chromium's sandbox
@@ -142,8 +182,19 @@ if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)"
   echo "ferrite: this system restricts user namespaces (Ubuntu 23.10+), so the" >&2
   echo "         sandbox cannot start from an AppImage. Install the .deb instead." >&2
 fi
-exec "$HERE/opt/ferrite/ferrite" "$@"
 EOF
+  if [ "$EDITION" = mcp ]; then
+    cat >> "$APPDIR/AppRun" <<'EOF'
+# `Ferrite-mcp-*.AppImage --mcp-server` is what an MCP client runs. The server
+# starts the browser as a separate run of this AppImage (its own mount).
+if [ "${1:-}" = --mcp-server ]; then
+  shift
+  export FERRITE_MCP_BROWSER="${APPIMAGE:-$0}"
+  exec "$HERE/opt/ferrite/ferrite-mcp" "$@"
+fi
+EOF
+  fi
+  echo 'exec "$HERE/opt/ferrite/ferrite" "$@"' >> "$APPDIR/AppRun"
   chmod 755 "$APPDIR/AppRun"
   TOOL="$ROOT/dist/.tools/appimagetool-x86_64.AppImage"
   if [ ! -x "$TOOL" ]; then
@@ -151,7 +202,7 @@ EOF
     curl -fsSLo "$TOOL" https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
     chmod +x "$TOOL"
   fi
-  OUT="dist/Ferrite-${VERSION}-x86_64.AppImage"
+  OUT="dist/${NAME}-${VERSION}-x86_64.AppImage"
   # Extract-and-run: works without FUSE (containers, CI).
   ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "$APPDIR" "$OUT" >/dev/null
   echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
