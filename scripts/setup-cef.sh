@@ -42,8 +42,10 @@ fi
 CEF_PATH="${CEF_PATH:-$HOME/.local/share/cef}"
 VERSION="$(grep -oP 'cef = \{ version = "=\K[^"]+' "$ROOT/app/Cargo.toml")"
 echo "Installing CEF for cef crate $VERSION into $CEF_PATH"
-if ! command -v export-cef-dir >/dev/null || ! export-cef-dir --version 2>/dev/null | grep -q "$VERSION"; then
-  cargo install --locked export-cef-dir --version "$VERSION"
+# The installed version comes from cargo's list (`export-cef-dir --version`
+# takes an argument). --force replaces an older one, e.g. from a CI cache.
+if ! command -v export-cef-dir >/dev/null || ! cargo install --list | grep -q "^export-cef-dir v${VERSION}[+:]"; then
+  cargo install --locked --force export-cef-dir --version "$VERSION"
 fi
 export-cef-dir --force "$CEF_PATH"
 echo
