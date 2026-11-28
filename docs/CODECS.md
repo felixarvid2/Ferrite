@@ -58,9 +58,11 @@ The only maintained Linux x64 codec build found is **obs-rust/cef, release
 `fb36df11bc8280c9cb666732becc1fe267f833bb964dbb13d69cad33488171dc`). It was
 built for OBS with `proprietary_codecs=true ffmpeg_branding=Chrome`.
 
-- It is **CEF 156.0.8 / Chromium 156.0.8078.48**, older than Ferrite's pinned
-  156.0.26 / 156.0.8078.88, so it **lacks the Chromium security fixes in
-  between**. A browser runs untrusted web content, so this matters.
+- It is **CEF 156.0.8 / Chromium 156.0.8078.48**. Ferrite now pins CEF 158
+  (Chromium 158.0.8127.89), so it no longer matches: `setup-cef.sh --codecs`
+  refuses while the pin is not 156, and an H.264 build with it is only possible
+  from Ferrite 0.4.x (for example ref `ferrite-v0.4.0`). It also **lacks the
+  Chromium security fixes** of newer releases. A browser runs untrusted web content, so this matters.
 - It comes from a small third-party organisation with unknown provenance and
   update cadence. Verify the sha256 and pin it.
 - The API version (15600) matches. `build-cef-codecs.sh --install-only` accepts

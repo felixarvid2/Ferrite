@@ -43,8 +43,13 @@ pub struct Settings {
     pub tab_sleep_minutes: u32,
     /// Use the desktop's title bar instead of Ferrite's tab strip.
     pub system_titlebar: bool,
-    /// Show tabs in a sidebar on the left (default) instead of above the toolbar.
+    /// Show tabs in a sidebar on the left instead of above the toolbar (default:
+    /// off in Ferrite, which looks like Firefox; on in Ferrite-mcp).
     pub vertical_tabs: bool,
+    /// Set once the Firefox look (horizontal tabs) has been applied to an older
+    /// profile; missing in files written before it, so they switch once.
+    #[serde(default)]
+    pub firefox_look: bool,
     /// Offer logins from Proton Pass through the `pass-cli` tool.
     pub proton_pass: bool,
     /// Path of `pass-cli`; empty = look in PATH, then ~/.local/bin.
@@ -85,7 +90,8 @@ impl Default for Settings {
             default_zoom_percent: 100,
             tab_sleep_minutes: 60,
             system_titlebar: false,
-            vertical_tabs: true,
+            vertical_tabs: ferrite_mcp::edition::MCP_EDITION,
+            firefox_look: true,
             proton_pass: false,
             proton_pass_cli: String::new(),
             proton_pass_offer_save: true,
@@ -106,8 +112,18 @@ impl Settings {
             Ok(b) => b,
             Err(_) => return Settings::default(),
         };
-        match serde_json::from_slice(&bytes) {
-            Ok(s) => s,
+        match serde_json::from_slice::<Settings>(&bytes) {
+            Ok(mut s) => {
+                // Ferrite 0.5 looks like Firefox: move older profiles to tabs
+                // above the toolbar once (they can switch back in Settings).
+                if !s.firefox_look {
+                    s.firefox_look = true;
+                    if !ferrite_mcp::edition::MCP_EDITION {
+                        s.vertical_tabs = false;
+                    }
+                }
+                s
+            }
             Err(e) => {
                 tracing::warn!("corrupt settings file {}: {e}", path.display());
                 Settings::default()
@@ -211,6 +227,19 @@ mod tests {
         assert!(s.check_for_updates);
         let s: Settings = serde_json::from_str(r#"{"check_for_updates":false}"#).unwrap();
         assert!(!s.check_for_updates);
+    }
+
+    #[test]
+    fn older_profiles_move_to_the_firefox_look_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("settings.json");
+        std::fs::write(&p, r#"{"vertical_tabs":true}"#).unwrap();
+        let s = Settings::load(&p);
+        assert!(s.firefox_look);
+        assert_eq!(s.vertical_tabs, ferrite_mcp::edition::MCP_EDITION);
+        // Chosen again after the switch: kept.
+        std::fs::write(&p, r#"{"vertical_tabs":true,"firefox_look":true}"#).unwrap();
+        assert!(Settings::load(&p).vertical_tabs);
     }
 
     #[test]

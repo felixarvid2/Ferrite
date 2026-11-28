@@ -19,6 +19,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [ "${1:-}" = "--codecs" ]; then
+  PIN="$(grep -oP 'cef = \{ version = "=\K[^"]+' "$ROOT/app/Cargo.toml")"
+  if [ "${PIN%%.*}" != 156 ]; then
+    echo "The prebuilt codec CEF is CEF 156, but app/Cargo.toml pins cef $PIN." >&2
+    echo "They cannot be mixed: build Ferrite <= 0.4.x with it, or build a matching" >&2
+    echo "codec CEF yourself (scripts/build-cef-codecs.sh, see docs/CODECS.md)." >&2
+    exit 1
+  fi
   OUT="${CEF_PATH:-$HOME/.local/share/cef-codecs}"
   URL="https://github.com/obs-rust/cef/releases/download/8078/cef_binary_8078_linux_x86_64.tar.xz"
   SHA256="fb36df11bc8280c9cb666732becc1fe267f833bb964dbb13d69cad33488171dc"

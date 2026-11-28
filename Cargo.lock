@@ -204,9 +204,9 @@ dependencies = [
 
 [[package]]
 name = "cef"
-version = "156.4.0+156.0.26"
+version = "158.0.0+158.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f48d6e78916f115e21933b44c39bd20de0bd25c753fb86b61fb4e2b84b001877"
+checksum = "641d21feb20ed187b127c2ec63a3448acc8c70e45368ffcc69b34a7b6c029f86"
 dependencies = [
  "cef-dll-sys",
  "libloading",
@@ -216,9 +216,9 @@ dependencies = [
 
 [[package]]
 name = "cef-dll-sys"
-version = "156.4.0+156.0.26"
+version = "158.0.0+158.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a29dddf938de892feea7601d6a8aee3ae2ff8c8d6a3fe30022c1356097fa8e6"
+checksum = "06c4e45ae58fd251e0e9722b5f495f536adf77811ecb81ce5fabdb65ab68b43c"
 dependencies = [
  "anyhow",
  "cc",
@@ -321,9 +321,9 @@ dependencies = [
 
 [[package]]
 name = "cookie"
-version = "0.18.2"
+version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a373e3602691c3cdea496d2f0ee5935151e6168fe87739483c463db1b2f2f87"
+checksum = "d55f2d6c30eeec7d5c6f98bd4395d4abb1895629eab97ee6522d340623615f8a"
 dependencies = [
  "percent-encoding",
  "time",
@@ -438,9 +438,9 @@ dependencies = [
 
 [[package]]
 name = "download-cef"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05ee509499d14dc47da5f824e4bb1bd558ceb259adc5475956265d48787a80da"
+checksum = "734444ee6a26f89cc9f883e9de0ced6b2afef7d4c561d7c949aeb13119f8f98d"
 dependencies = [
  "bzip2",
  "clap",
@@ -615,9 +615,9 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+checksum = "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
 dependencies = [
  "percent-encoding",
 ]
@@ -1992,9 +1992,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.5.8"
+version = "2.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+checksum = "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
 dependencies = [
  "form_urlencoded",
  "idna",

@@ -1,0 +1,98 @@
+/* Firefox-style browser chrome for standard Ferrite (appended to chrome.css by
+   assets.rs; Ferrite-mcp keeps the Kladd look). Horizontal "floating" tabs on a
+   grey strip, a light toolbar, a flat address field that lights up blue on focus,
+   4px corners and the system UI font. Only tokens and shapes change here. */
+:root {
+  --frame: #1c1b22; --bar: #2b2a33; --field: #1c1b22; --field-hover: #23222b;
+  --ink: #fbfbfe; --ink-2: #cfcfd8; --ink-3: #8f8f9d; --line: #0c0c0d;
+  --hover: rgba(251,251,254,.1); --press: rgba(251,251,254,.2); --pill: rgba(251,251,254,.08);
+  --accent: #00ddff; --accent-ink: #15141a; --field-line: transparent; --danger: #ff848b; --warn: #ffd567;
+  --tab-sel: #42414d; --field-focus: #42414d;
+  --tab-h: 36px; --bar-h: 40px; --radius-tab: 4px; --r: 4px;
+  --ui-font: system-ui, -apple-system, "Segoe UI", Cantarell, Ubuntu, "Noto Sans", "DejaVu Sans", sans-serif;
+}
+:root[data-theme="light"] {
+  --frame: #f0f0f4; --bar: #f9f9fb; --field: #f0f0f4; --field-hover: #e9e9ef;
+  --ink: #15141a; --ink-2: #5b5b66; --ink-3: #8f8f9d; --line: #e0e0e6;
+  --hover: rgba(21,20,26,.07); --press: rgba(21,20,26,.14); --pill: rgba(21,20,26,.05);
+  --accent: #0061e0; --accent-ink: #ffffff; --field-line: transparent; --danger: #d7264c; --warn: #b56900;
+  --tab-sel: #ffffff; --field-focus: #ffffff;
+}
+:root[data-private] { --frame: #25003e; --bar: #2e1a4a; --field: #1f0a35; --field-hover: #2a1242; --tab-sel: #4a2a70; --field-focus: #3a1e5c;
+  --line: #14001f; --hover: rgba(251,251,254,.1); --press: rgba(251,251,254,.2); --pill: rgba(251,251,254,.08);
+  --accent: #c689ff; --accent-ink: #1a0c33; --ink: #fbfbfe; --ink-2: #d7c6ef; --ink-3: #a58fc6; }
+:root[data-ai] { --frame: #0e2b2b; --bar: #14393a; --field: #0f2f30; --field-hover: #163f40; --tab-sel: #235658; --field-focus: #235658;
+  --line: #0a1f1f; --hover: rgba(226,241,239,.1); --press: rgba(226,241,239,.2); --pill: rgba(226,241,239,.08);
+  --accent: #4fd1c5; --accent-ink: #052321; --ink: #e2f1ef; --ink-2: #b4d3d0; --ink-3: #6a9692; }
+
+body { font: 400 13px/1.35 var(--ui-font); }
+.tb { border-radius: var(--r); color: var(--ink); }
+.tb svg { stroke-width: 1.5; }
+
+/* ---- tab strip: floating tabs ------------------------------------- */
+#tabstrip { height: 44px; align-items: center; padding: 0 6px 0 4px; }
+#wordmark { display: none; }
+#tabs { height: var(--tab-h); gap: 0; align-items: center; }
+.tab { height: var(--tab-h); margin: 0 1px; padding: 0 6px 0 10px; width: 225px; min-width: 76px; flex: 0 1 225px;
+  border-radius: var(--radius-tab); color: var(--ink); }
+.tab:hover:not(.active) { background: var(--hover); color: var(--ink); height: var(--tab-h); border-radius: var(--radius-tab); align-self: center; }
+.tab.active { background: var(--tab-sel); box-shadow: 0 0 4px rgba(0,0,0,.3); }
+:root[data-theme="light"] .tab.active { box-shadow: 0 0 4px rgba(0,0,0,.18); }
+.tab.active::before { display: none; }
+.tab.active .tab-title { font-weight: 400; }
+/* thin separators between inactive tabs, like Firefox */
+.tab:not(.active):not(:hover) + .tab:not(.active):not(:hover)::after { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 1px;
+  background: color-mix(in srgb, var(--ink-3) 35%, transparent); }
+.tab-title { font-size: 12.5px; }
+.tab-close { border-radius: var(--r); width: 22px; height: 22px; opacity: 1; color: var(--ink); }
+.tab:not(.active):not(:hover) .tab-close { opacity: 0; }
+.tab-close:hover { background: var(--hover); }
+.tab-close svg { width: 10px; height: 10px; stroke-width: 1.8; }
+.tab.ai { box-shadow: inset 0 -2px 0 #4fd1c5; }
+.tab.active.ai { box-shadow: 0 0 4px rgba(0,0,0,.3), inset 0 -2px 0 #4fd1c5; }
+#newtab { margin: 0 0 0 4px; width: 28px; height: 28px; align-self: center; }
+#private-badge, #ai-badge { align-self: center; margin-bottom: 0; border-radius: var(--r); }
+#winctl { align-self: center; margin-top: 0; }
+.wc { border-radius: 50%; background: none; color: var(--ink); }
+.wc:hover { background: var(--hover); }
+
+/* ---- toolbar: flat address field ---------------------------------- */
+#toolbar { height: var(--bar-h); padding: 0 6px; gap: 2px; }
+#omnibox { height: 32px; margin: 0 6px; padding: 0 3px 0 6px; border-radius: var(--r); background: var(--field); box-shadow: none; }
+#omnibox:hover { background: var(--field-hover); box-shadow: none; }
+#omnibox:focus-within { background: var(--field-focus); box-shadow: 0 0 0 2px var(--accent); }
+#address, #address-view { font: 400 14px var(--ui-font); }
+#address::placeholder { font: 400 14px var(--ui-font); color: var(--ink-3); }
+#address-view { color: var(--ink-2); }
+#address-view b { font-weight: 400; color: var(--ink); }
+#security { border-radius: var(--r); font-size: 12px; }
+#security.internal { color: var(--ink-2); }
+#zoom { border-radius: var(--r); }
+#star.on { color: var(--accent); }
+#shield { color: var(--ink-2); }
+#shield:not(.off) { color: var(--accent); }
+#shield-badge, #dl-badge { border-radius: 7px; }
+#progress { height: 2px; background: var(--accent); }
+
+/* ---- dropdowns and bars ------------------------------------------- */
+.sg { border-radius: var(--r); }
+.sg .u { font: 400 12.5px var(--ui-font); }
+#bookmarks { height: 30px; padding: 0 6px 2px; }
+.bm { border-radius: var(--r); }
+.bm span { font-size: 12px; }
+#findbar, #prompts .prompt, #crashbar { background: var(--bar); border-top: 1px solid var(--line); }
+#find-input { border-radius: var(--r); background: var(--field); box-shadow: none; }
+#find-input:focus { background: var(--field-focus); box-shadow: 0 0 0 2px var(--accent); }
+.pbtn { border-radius: var(--r); background: var(--hover); box-shadow: none; }
+.pbtn:hover { background: var(--press); }
+.pbtn.primary { background: var(--accent); color: var(--accent-ink); }
+#toast { border-radius: var(--r); top: 92px; }
+
+/* ---- vertical tabs (still available in Settings) ------------------ */
+:root[data-vtabs] #tabstrip { height: 36px; }
+:root[data-side] #tabstrip { padding: 6px; gap: 2px; box-shadow: inset -1px 0 0 var(--line); }
+:root[data-side] .tab, :root[data-side] .tab.pinned { height: 32px; margin: 0; border-radius: var(--r); padding: 0 6px 0 10px; }
+:root[data-side] .tab:hover:not(.active) { height: 32px; border-radius: var(--r); }
+:root[data-side] .tab::after { display: none; }
+:root[data-side] #newtab { border-radius: var(--r); padding-left: 10px; height: 32px; }
+:root[data-side] #newtab:hover { background: var(--hover); }

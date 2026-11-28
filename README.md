@@ -11,8 +11,8 @@ Ferrite is at an early stage and is only tested on Linux/X11. See
 
 ## Overview
 
-- Engine: Chromium 156.0.8078.88 via CEF 156.0.26, through the Rust bindings
-  crate `cef` 156.4.0 (pinned exactly in `app/Cargo.toml`).
+- Engine: Chromium 158.0.8127.89 via CEF 158.0.6, through the Rust bindings
+  crate `cef` 158.0.0 (pinned exactly in `app/Cargo.toml`).
 - Browser state (history, bookmarks, permissions, downloads list) is stored in
   SQLite. Settings and session are JSON files.
 - The browser UI is HTML, CSS and JavaScript in `ui/`, embedded in the binary.
