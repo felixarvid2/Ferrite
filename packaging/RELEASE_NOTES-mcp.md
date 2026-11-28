@@ -1,6 +1,11 @@
 Ferrite-mcp is the edition of Ferrite meant to be driven by AI clients over
-MCP (Model Context Protocol). Linux x86_64. It installs next to Ferrite and
-keeps its own profile, so the two can run side by side.
+MCP (Model Context Protocol). Linux x86_64 and arm64. Chromium 158 (CEF 158.0.6).
+
+New in 0.5.0: Chromium 156 -> 158 with its security fixes, the `url` and
+`cookie` crate fixes, and arm64 packages.
+
+It installs next to Ferrite and keeps its own profile, so the two can run
+side by side.
 
 ## How it differs from Ferrite
 
@@ -30,7 +35,10 @@ keeps its own profile, so the two can run side by side.
   `/path/to/Ferrite-mcp-*.AppImage --mcp-server` as the MCP command. On
   Ubuntu 23.10+ its sandbox cannot start (user namespaces are restricted);
   use the .deb there.
-- `SHA256SUMS`: checksums.
+- **`ferrite-mcp_*_arm64.deb`**: the same for arm64; checksums in
+  `SHA256SUMS-arm64`.
+- `SHA256SUMS`: checksums of the x86_64 packages.
 
-Everything else (ad blocking, tabs, the Kladd look) is the same as Ferrite
-of the same version. The browser needs a graphical session (X11 or Wayland).
+Everything else (ad blocking, tabs) is the same as Ferrite of the same
+version; Ferrite-mcp keeps the Kladd look and the tab sidebar, while Ferrite
+now looks like Firefox. The browser needs a graphical session (X11 or Wayland).
