@@ -16,10 +16,10 @@ binary with `include_bytes` (`app/src/browser/assets.rs`). Setting
 
 ## Engine
 
-- Chromium 156.0.8078.88 through CEF 156.0.26. The CEF minimal prebuilt
+- Chromium 158.0.8127.89 through CEF 158.0.6. The CEF minimal prebuilt
   distribution is downloaded from the Spotify CDN; Chromium is never compiled
   locally.
-- Rust bindings: crate `cef` 156.4.0 (tauri-apps/cef-rs), pinned exactly in
+- Rust bindings: crate `cef` 158.0.0 (tauri-apps/cef-rs), pinned exactly in
   `app/Cargo.toml`. The bindings are generated from the CEF headers.
 - Rust stable 1.97.
 - Storage: rusqlite with the bundled SQLite.

@@ -15,6 +15,8 @@ ui_files!(
     "chrome.js",
     "common.css",
     "common.js",
+    "firefox-common.css",
+    "firefox-chrome.css",
     "newtab.html",
     "history.html",
     "bookmarks.html",
@@ -49,7 +51,26 @@ pub fn mime_for(name: &str) -> &'static str {
 }
 
 /// Look up a UI file by name (no directories allowed, except `fonts/`).
+///
+/// Standard Ferrite looks like Firefox: its overlay stylesheets are appended to
+/// `common.css` and `chrome.css`. Ferrite-mcp keeps the Kladd look.
 pub fn get(name: &str) -> Option<Vec<u8>> {
+    let mut bytes = raw(name)?;
+    if !ferrite_mcp::edition::MCP_EDITION {
+        let overlay = match name {
+            "common.css" => Some("firefox-common.css"),
+            "chrome.css" => Some("firefox-chrome.css"),
+            _ => None,
+        };
+        if let Some(extra) = overlay.and_then(raw) {
+            bytes.push(b'\n');
+            bytes.extend_from_slice(&extra);
+        }
+    }
+    Some(bytes)
+}
+
+fn raw(name: &str) -> Option<Vec<u8>> {
     // Flat namespace, except for the fonts under `fonts/`.
     let flat = name.strip_prefix("fonts/").unwrap_or(name);
     if flat.is_empty() || flat.contains('/') || name.contains("..") || name.contains('\\') {

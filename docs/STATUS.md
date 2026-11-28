@@ -1,8 +1,8 @@
 # Status
 
 Ferrite is an early-stage browser. This page lists what has been checked, what
-has not, and what is missing. It was last updated for the Chromium 156 build
-(CEF 156.0.26, `cef` 156.4.0).
+has not, and what is missing. It was last updated for the Chromium 158 build
+(CEF 158.0.6, `cef` 158.0.0).
 
 Test environment for the "verified" list: Ubuntu 24.04 container, Xvfb with
 openbox, no GPU, run as root with `--no-sandbox`. Input was sent with real X
@@ -188,11 +188,23 @@ sleeping handed-over tab waking, controlled tabs not sleeping, private-window ta
   no Ferrite window buttons (checked under openbox).
 - Not checked: GNOME/KDE window managers, Wayland.
 
-### Vertical tabs (default layout)
+### Firefox look (standard Ferrite)
 
-- Default since the design review scored it 9/10 (top tabs: 8.7/10). Settings >
-  Appearance > "Vertical tabs" switches back to tabs above the toolbar (new
-  windows; existing profiles keep their saved choice). Tabs
+- `ui/firefox-chrome.css` and `ui/firefox-common.css` are appended to `chrome.css`
+  and `common.css` in the standard build (`assets.rs`): floating horizontal tabs,
+  flat address field with a blue (light) / cyan (dark) focus ring, 4px corners,
+  system UI font; internal pages and the New Tab page (logo, search, top-site
+  icons) in Firefox colours, without the field-line decoration. Checked by
+  screenshots in light and dark mode (toolbar, web page, New Tab, Settings).
+- Not checked: private and AI windows in the light theme, the vertical sidebar
+  in this look, HiDPI.
+
+### Vertical tabs (optional; default in Ferrite-mcp)
+
+- Ferrite (standard) has looked like Firefox since 0.5: tabs above the toolbar by
+  default, and existing profiles are switched once (Settings > Appearance >
+  "Vertical tabs" turns the sidebar back on). Ferrite-mcp keeps the sidebar and
+  the Kladd look. Tabs
   move to a 240 px sidebar left of the content (a second UI view running
   `chrome.html#side` against the same API); the top strip keeps the window
   buttons and drag area. Checked: layout after restart with restored tabs,

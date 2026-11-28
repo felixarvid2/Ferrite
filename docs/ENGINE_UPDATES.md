@@ -8,8 +8,8 @@ Ferrite's engine consists of two parts that must match:
 
 Versions of the `cef` crate have the form `<cef major>.<minor>.<patch>+<cef build>`,
 for example `156.4.0+156.0.26`. The part after `+` is the CEF build. The current
-pin is `cef = { version = "=156.4.0" }`, which uses CEF 156.0.26 and Chromium
-156.0.8078.88.
+pin is `cef = { version = "=158.0.0" }`, which uses CEF 158.0.6 and Chromium
+158.0.8127.89 (updated from 156.4.0 without code changes).
 
 ## When to update
 

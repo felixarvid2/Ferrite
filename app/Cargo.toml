@@ -19,7 +19,7 @@ ferrite-mcp = { path = "../mcp" }
 dirs.workspace = true
 # The CEF version is pinned exactly: every bump of this line is an engine
 # (Chromium) update, see docs/ENGINE_UPDATES.md.
-cef = { version = "=156.4.0", default-features = false, features = ["sandbox"] }
+cef = { version = "=158.0.0", default-features = false, features = ["sandbox"] }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

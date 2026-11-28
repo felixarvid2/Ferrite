@@ -1,0 +1,57 @@
+/* Firefox-style internal pages for standard Ferrite (appended to common.css by
+   assets.rs; Ferrite-mcp keeps the Kladd look). Grey page, white/dark cards,
+   blue accent (cyan in dark mode), 4-8px corners, the system UI font. */
+:root {
+  --chrome: #1c1b22; --bg: #1c1b22; --bg2: #2b2a33; --bg3: #42414d; --line: #3a3944;
+  --fg: #fbfbfe; --fg2: #cfcfd8; --fg3: #8f8f9d; --faint: #5b5b66;
+  --accent: #00ddff; --accent-fg: #15141a; --accent-soft: rgba(0,221,255,.14); --accent-ring: rgba(0,221,255,.7); --accent-rgb: 0,221,255;
+  --link: #00ddff; --select: rgba(0,221,255,.3);
+  --label: #cfcfd8; --switch-off: #5b5b66; --switch-thumb: #fbfbfe; --tile-cap: #fbfbfe; --date: #cfcfd8;
+  --border-strong: #5b5b66; --hover: rgba(251,251,254,.07); --active: #42414d;
+  --danger: #ff848b; --danger-soft: rgba(255,132,139,.14); --ok: #54ffbd; --ok-soft: rgba(84,255,189,.12);
+  --warn: #ffd567; --warn-soft: rgba(255,213,103,.14);
+  --ctl-r: 4px; --radius: 8px; --radius-sm: 4px; --radius-lg: 8px; --radius-menu: 6px;
+  --font: system-ui, -apple-system, "Segoe UI", Cantarell, Ubuntu, "Noto Sans", "DejaVu Sans", sans-serif;
+  --mono: ui-monospace, "DejaVu Sans Mono", "Noto Sans Mono", Menlo, monospace;
+}
+:root[data-theme="light"] {
+  --chrome: #f0f0f4; --bg: #f9f9fb; --bg2: #ffffff; --bg3: #e8e8ee; --line: #e0e0e6;
+  --fg: #15141a; --fg2: #5b5b66; --fg3: #8f8f9d; --faint: #cfcfd8;
+  --accent: #0061e0; --accent-fg: #ffffff; --accent-soft: rgba(0,97,224,.1); --accent-ring: rgba(0,97,224,.6); --accent-rgb: 0,97,224;
+  --link: #0061e0; --select: rgba(0,97,224,.2);
+  --label: #5b5b66; --switch-off: #8f8f9d; --switch-thumb: #ffffff; --tile-cap: #15141a; --date: #5b5b66;
+  --border-strong: #8f8f9d; --hover: rgba(21,20,26,.05); --active: #e0e0e6;
+  --danger: #d7264c; --danger-soft: rgba(215,38,76,.08); --ok: #017a40; --ok-soft: rgba(1,122,64,.08);
+  --warn: #b56900; --warn-soft: rgba(181,105,0,.1);
+}
+html, body { font-size: 14px; }
+input[type=checkbox]:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E"); }
+:root:not([data-theme="light"]) input[type=checkbox]:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2315141a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E"); }
+
+/* No Kladd/Ferrite decorations: no field lines, no wordmark caret. */
+html .page-field, html #field { display: none; }
+html .brand .caret { display: none; }
+
+/* New Tab, Firefox style: logo and name above a large search field, then the
+   top sites as icons with captions (the page's own styles are inline, hence
+   the extra `html` for specificity). */
+html .nt { padding-top: 18vh; }
+html .hero { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 36px; }
+html .hero::before { content: ""; position: static; transform: none; width: 56px; height: 56px; z-index: auto;
+  background: url("ferrite://app/icon.svg") center / contain no-repeat; }
+html .hero::after { content: "Ferrite"; font-size: 34px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
+html .hero .clock, html .hero .greet { display: none; }
+html .search input { height: 52px; border-radius: 8px; border: 0; background: var(--bg2); font-size: 15px;
+  box-shadow: 0 3px 8px rgba(0,0,0,.08), 0 0 2px rgba(0,0,0,.15); }
+html .search input:focus, html .search input:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+:root:not([data-theme="light"]) .search input { background: #42414d; box-shadow: 0 3px 8px rgba(0,0,0,.25); }
+html .tiles { gap: 8px 16px; margin-top: 40px; }
+html .tile { width: 96px; min-height: 0; padding: 6px 4px; background: none; box-shadow: none; border-radius: 8px; }
+html .tile:hover { background: var(--hover); transform: none; }
+html .tile .ic { width: 80px; height: 80px; border-radius: 8px; background: var(--bg2);
+  box-shadow: 0 2px 6px rgba(0,0,0,.08), 0 0 2px rgba(0,0,0,.12); }
+:root:not([data-theme="light"]) .tile .ic { background: #42414d; }
+html .tile .ic img.fav { width: 32px; height: 32px; }
+html .tile .ic .avatar { width: 80px; height: 80px; border-radius: 8px; }
+html .tile span.name { font-size: 12px; }
+html .private { border-radius: 8px; }
